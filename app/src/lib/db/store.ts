@@ -28,6 +28,15 @@ export interface JsonExport {
 
 const nowIso = () => new Date().toISOString();
 
+/**
+ * Nom d'un compteur supprimé définitivement. La ligne reste comme « pierre tombale »
+ * vidée de son contenu, pour que la suppression se propage par la synchronisation.
+ */
+export const PURGED_NAME = '∅';
+
+/** Durée de séjour dans la corbeille avant suppression définitive automatique. */
+export const TRASH_DAYS = 30;
+
 /** Décalage horaire local en minutes (ex. +60 pour Paris en hiver). */
 export const localOffset = (d: Date = new Date()) => -d.getTimezoneOffset();
 
@@ -236,8 +245,46 @@ export class Store {
   listDeletedTrackers(): (Tracker & { event_count: number })[] {
     return this.sql.all<Tracker & { event_count: number }>(
       `SELECT t.*, (SELECT COUNT(*) FROM event e WHERE e.tracker_id = t.id AND e.deleted_at = t.deleted_at) AS event_count
-       FROM tracker t WHERE t.deleted_at IS NOT NULL ORDER BY t.deleted_at DESC`,
+       FROM tracker t WHERE t.deleted_at IS NOT NULL AND t.name <> ? ORDER BY t.deleted_at DESC`,
+      [PURGED_NAME],
     );
+  }
+
+  /**
+   * Supprime définitivement un compteur de la corbeille : son nom, ses champs et le
+   * contenu de ses événements (mesures, notes, dates) sont effacés. Il ne reste que des
+   * identifiants vides, nécessaires pour propager la suppression aux autres appareils.
+   */
+  purgeTracker(id: string): void {
+    const [t] = this.sql.all<Row>('SELECT * FROM tracker WHERE id = ? AND deleted_at IS NOT NULL', [id]);
+    if (!t || t.name === PURGED_NAME) return;
+    const at = String(t.deleted_at);
+    const stamp = () => ({ updated_at: this.hlc.now(), device_id: this.deviceId });
+    this.tx(() => {
+      this.upsert('tracker', {
+        ...t, name: PURGED_NAME, icon: null, color: null, goal_kind: null, goal_count: null, goal_period: null,
+        archived_at: null, created_at: at, ...stamp(),
+      });
+      for (const f of this.sql.all<Row>('SELECT * FROM tracker_field WHERE tracker_id = ?', [id])) {
+        this.upsert('tracker_field', { ...f, name: PURGED_NAME, unit: null, created_at: at, deleted_at: f.deleted_at ?? at, ...stamp() });
+      }
+      for (const e of this.sql.all<Row>('SELECT * FROM event WHERE tracker_id = ?', [id])) {
+        this.upsert('event', {
+          ...e, occurred_at: at, tz_offset: 0, measures: null, note: null, created_at: at, deleted_at: e.deleted_at ?? at, ...stamp(),
+        });
+      }
+    });
+  }
+
+  /** Supprime définitivement les compteurs restés plus de `days` jours dans la corbeille. */
+  purgeExpiredTrash(days = TRASH_DAYS, now = Date.now()): number {
+    const limit = new Date(now - days * 86_400_000).toISOString();
+    const ids = this.sql.all<{ id: string }>(
+      'SELECT id FROM tracker WHERE deleted_at IS NOT NULL AND deleted_at < ? AND name <> ?',
+      [limit, PURGED_NAME],
+    );
+    for (const { id } of ids) this.purgeTracker(id);
+    return ids.length;
   }
 
   /**
@@ -247,7 +294,7 @@ export class Store {
    */
   restoreTracker(id: string): void {
     const [t] = this.sql.all<Row>('SELECT * FROM tracker WHERE id = ? AND deleted_at IS NOT NULL', [id]);
-    if (!t) return;
+    if (!t || t.name === PURGED_NAME) return;
     const at = t.deleted_at;
     this.tx(() => {
       this.upsert('tracker', { ...t, deleted_at: null, updated_at: this.hlc.now(), device_id: this.deviceId });
@@ -302,13 +349,13 @@ export class Store {
             s.ignored++;
             continue;
           }
-          const [cur] = this.sql.all<{ updated_at: string; deleted_at: string | null }>(
-            `SELECT updated_at, deleted_at FROM ${t} WHERE id = ?`,
+          const [cur] = this.sql.all<{ updated_at: string; deleted_at: string | null; name?: string }>(
+            `SELECT * FROM ${t} WHERE id = ?`,
             [row.id],
           );
           if (cur && cur.updated_at >= String(row.updated_at)) {
             s.ignored++;
-            if (t === 'tracker' && cur.deleted_at && !row.deleted_at) summary.stillDeleted++;
+            if (t === 'tracker' && cur.deleted_at && !row.deleted_at && cur.name !== PURGED_NAME) summary.stillDeleted++;
             continue;
           }
           try {

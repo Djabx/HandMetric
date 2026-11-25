@@ -4,10 +4,11 @@
   import { fmtDate, i18n, setLang, t, type Lang } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
   import { download, stamp } from '../../lib/io/download';
-  import { APP_VERSION } from '../../lib/db/store';
+  import { APP_VERSION, TRASH_DAYS } from '../../lib/db/store';
   import SyncPanel from '../components/SyncPanel.svelte';
 
   let busy = $state(false);
+  const purgeDate = (deletedAt: string) => new Date(Date.parse(deletedAt) + TRASH_DAYS * 86_400_000).toISOString();
   let persisted = $state<boolean | null>(null);
   $effect(() => {
     navigator.storage?.persisted?.().then((p) => (persisted = p));
@@ -86,6 +87,7 @@
   {#if app.archived.length}
     <section class="section">
       <h2>{t('settings.archived')}</h2>
+      <p class="small muted">{t('settings.archived.help')}</p>
       <ul class="list card" style="padding:0 16px">
         {#each app.archived as tr (tr.id)}
           <li class="row" style="padding:8px 0">
@@ -106,14 +108,23 @@
           <li class="row" style="padding:8px 0">
             <div class="grow">
               <div>{tr.icon ?? ''} {tr.name}</div>
-              <div class="small muted">{t('settings.trash.meta', { date: fmtDate(tr.deleted_at!), n: tr.event_count })}</div>
+              <div class="small muted">{t('settings.trash.meta', { date: fmtDate(tr.deleted_at!), n: tr.event_count, purge: fmtDate(purgeDate(tr.deleted_at!)) })}</div>
             </div>
-            <button
-              class="btn small"
-              onclick={async () => {
-                await db.write('restoreTracker', tr.id);
-                toast(t('settings.trash.restored', { name: tr.name }), { icon: '♻️' });
-              }}>{t('settings.trash.restore')}</button>
+            <div class="trash-actions">
+              <button
+                class="btn small"
+                onclick={async () => {
+                  await db.write('restoreTracker', tr.id);
+                  toast(t('settings.trash.restored', { name: tr.name }), { icon: '♻️' });
+                }}>{t('settings.trash.restore')}</button>
+              <button
+                class="btn small danger"
+                onclick={async () => {
+                  if (!confirm(t('settings.trash.purgeConfirm', { name: tr.name, n: tr.event_count }))) return;
+                  await db.write('purgeTracker', tr.id);
+                  toast(t('settings.trash.purged', { name: tr.name }), { icon: '🔥' });
+                }}>{t('settings.trash.purge')}</button>
+            </div>
           </li>
         {/each}
       </ul>
@@ -131,5 +142,6 @@
 
 <style>
   h3 { font-size: 1rem; margin: 16px 0 8px; }
+  .trash-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
   .linkish { text-align: left; border: 0; background: none; cursor: pointer; padding: 8px 0; }
 </style>

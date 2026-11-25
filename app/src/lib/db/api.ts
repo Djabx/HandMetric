@@ -16,6 +16,7 @@ export interface SyncState {
 /** API exposée par le worker de base de données (appelée par RPC depuis l'UI). */
 export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean) {
   const store = new Store(sql);
+  store.purgeExpiredTrash();
   return {
     info: () => ({ deviceId: store.deviceId, persistent }),
     listTrackers: (includeArchived = false) => store.listTrackers({ includeArchived }),
@@ -26,6 +27,7 @@ export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean) {
     deleteTracker: (id: string) => store.deleteTracker(id),
     listDeletedTrackers: () => store.listDeletedTrackers(),
     restoreTracker: (id: string) => store.restoreTracker(id),
+    purgeTracker: (id: string) => store.purgeTracker(id),
     reorderTrackers: (ids: string[]) => store.reorderTrackers(ids),
     listEvents: (trackerId: string, limit?: number) => store.listEvents(trackerId, { limit }),
     listAllEvents: () => store.listAllEvents(),
