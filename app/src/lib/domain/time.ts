@@ -1,4 +1,4 @@
-import type { Period } from '../types';
+import type { ChartPeriod } from '../types';
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -19,8 +19,9 @@ export function keyFromDayNumber(n: number): string {
 }
 
 /** Clé de période d'une clé de jour : jour, semaine ISO (lundi), mois. */
-export function periodKey(day: string, period: Period): string {
+export function periodKey(day: string, period: ChartPeriod): string {
   if (period === 'day') return day;
+  if (period === 'year') return day.slice(0, 4);
   if (period === 'month') return day.slice(0, 7);
   const n = dayNumber(day);
   const weekday = (new Date(n * DAY).getUTCDay() + 6) % 7; // lundi = 0
@@ -28,7 +29,8 @@ export function periodKey(day: string, period: Period): string {
 }
 
 /** Période précédente (clé). */
-export function previousPeriod(key: string, period: Period): string {
+export function previousPeriod(key: string, period: ChartPeriod): string {
+  if (period === 'year') return String(Number(key) - 1);
   if (period === 'day') return keyFromDayNumber(dayNumber(key) - 1);
   if (period === 'week') return keyFromDayNumber(dayNumber(key) - 7);
   const [y, m] = key.split('-').map(Number);

@@ -74,3 +74,21 @@ describe('stats', () => {
     expect(periodSeries(events, 'week', 4, created + 23 * DAY, 60).map((p) => p.count)).toEqual([3, 1, 0, 1]);
   });
 });
+
+describe('périodes affichées', () => {
+  it("compte par année et remonte dans le passé", async () => {
+    const { periodSeries } = await import('./stats');
+    const ev = (iso: string) => ({ id: iso, tracker_id: 't', occurred_at: iso, tz_offset: 0, measures: {}, note: '', created_at: iso, updated_at: '', device_id: '', deleted_at: null });
+    const events = [ev('2006-03-12T10:00:00Z'), ev('2006-07-01T10:00:00Z'), ev('2025-01-01T10:00:00Z')];
+    const now = Date.parse('2026-11-25T12:00:00Z');
+    const recent = periodSeries(events as never, 'year', 10, now, 0);
+    expect(recent.map((d) => d.key)).toEqual(['2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024', '2025', '2026']);
+    expect(recent.find((d) => d.key === '2025')?.count).toBe(1);
+    const older = periodSeries(events as never, 'year', 10, now, 0, 2);
+    expect(older[0].key).toBe('1997');
+    expect(older.find((d) => d.key === '2006')?.count).toBe(2);
+    const months = periodSeries(events as never, 'month', 12, now, 0, 1);
+    expect(months.map((d) => d.key)[0]).toBe('2024-12');
+    expect(months[1].count).toBe(1); // janvier 2025
+  });
+});

@@ -1,4 +1,4 @@
-import type { LifeEvent, Period, Tracker, TrackerField } from '../types';
+import type { ChartPeriod, LifeEvent, Period, Tracker, TrackerField } from '../types';
 import { DAY, addMonths, dayKey, dayNumber, keyFromDayNumber, periodKey, previousPeriod } from './time';
 
 export interface Gap {
@@ -20,12 +20,13 @@ export interface TrackerStats {
   today: number;
   thisWeek: number;
   thisMonth: number;
+  thisYear: number;
   /** Comptes par jour local "AAAA-MM-JJ". */
   perDay: Map<string, number>;
 }
 
 const evMs = (e: LifeEvent) => Date.parse(e.occurred_at);
-const evDay = (e: LifeEvent) => dayKey(evMs(e), e.tz_offset);
+export const evDay = (e: LifeEvent) => dayKey(evMs(e), e.tz_offset);
 
 /** Statistiques d'un compteur. `events` : non supprimés, dans n'importe quel ordre. */
 export function computeStats(tracker: Tracker, events: LifeEvent[], now: number, tzOffset: number): TrackerStats {
@@ -66,7 +67,7 @@ export function computeStats(tracker: Tracker, events: LifeEvent[], now: number,
     cursor--;
   }
 
-  const count = (p: Period) => countInPeriod(sorted, periodKey(todayKey, p), p);
+  const count = (p: ChartPeriod) => countInPeriod(sorted, periodKey(todayKey, p), p);
 
   return {
     count: sorted.length,
@@ -79,18 +80,29 @@ export function computeStats(tracker: Tracker, events: LifeEvent[], now: number,
     today: count('day'),
     thisWeek: count('week'),
     thisMonth: count('month'),
+    thisYear: count('year'),
     perDay,
   };
 }
 
-export function countInPeriod(events: LifeEvent[], key: string, period: Period): number {
+export function countInPeriod(events: LifeEvent[], key: string, period: ChartPeriod): number {
   let n = 0;
   for (const e of events) if (periodKey(evDay(e), period) === key) n++;
   return n;
 }
 
-/** Comptes des N dernières périodes, de la plus ancienne à la plus récente. */
-export function periodSeries(events: LifeEvent[], period: Period, n: number, now: number, tzOffset: number): { key: string; count: number }[] {
+/**
+ * Comptes de N périodes consécutives, de la plus ancienne à la plus récente.
+ * offset = nombre de fenêtres de N périodes à remonter (0 : la fenêtre finit sur la période en cours).
+ */
+export function periodSeries(
+  events: LifeEvent[],
+  period: ChartPeriod,
+  n: number,
+  now: number,
+  tzOffset: number,
+  offset = 0,
+): { key: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const e of events) {
     const k = periodKey(evDay(e), period);
@@ -98,6 +110,7 @@ export function periodSeries(events: LifeEvent[], period: Period, n: number, now
   }
   const out: { key: string; count: number }[] = [];
   let k = periodKey(dayKey(now, tzOffset), period);
+  for (let i = 0; i < offset * n; i++) k = previousPeriod(k, period);
   for (let i = 0; i < n; i++) {
     out.unshift({ key: k, count: counts.get(k) ?? 0 });
     k = previousPeriod(k, period);

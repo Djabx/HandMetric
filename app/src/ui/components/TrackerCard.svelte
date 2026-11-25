@@ -31,12 +31,8 @@
       <span class="name">{tr.name}</span>
     </div>
     {#if tr.display_mode === 'abstinence'}
-      {#if s.count === 0 && !s.gaps.length}
-        <div class="big">{t('dash.never')}</div>
-      {:else}
-        <div class="big">{humanDuration(s.currentGapFrom, now)}</div>
-        <div class="sub">{sinceLabel(s.currentGapFrom, now)}</div>
-      {/if}
+      <div class="big">{humanDuration(s.currentGapFrom, now)}</div>
+      <div class="sub">{sinceLabel(s.currentGapFrom, now, s.count === 0)}</div>
     {:else}
       <div class="big">{t('dash.today', { n: s.today })}</div>
       <div class="sub">
