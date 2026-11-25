@@ -25,7 +25,10 @@ pub fn to_json(data: &ChangeSet) -> Value {
         .map(|e| {
             let mut e = client_row("event", e);
             if let Some(Value::String(m)) = e.get("measures").cloned() {
-                e.insert("measures".into(), serde_json::from_str(&m).unwrap_or(Value::Null));
+                e.insert(
+                    "measures".into(),
+                    serde_json::from_str(&m).unwrap_or(Value::Null),
+                );
             }
             Value::Object(e)
         })
@@ -48,22 +51,39 @@ pub fn from_json(v: &Value) -> Result<ChangeSet> {
         bail!("ce fichier vient d'une version plus récente de LifeLog");
     }
     let rows = |k: &str| -> Vec<Row> {
-        v.get(k).and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_object().cloned()).collect()).unwrap_or_default()
+        v.get(k)
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|x| x.as_object().cloned()).collect())
+            .unwrap_or_default()
     };
-    Ok(ChangeSet { tracker: rows("trackers"), tracker_field: rows("tracker_fields"), event: rows("events") })
+    Ok(ChangeSet {
+        tracker: rows("trackers"),
+        tracker_field: rows("tracker_fields"),
+        event: rows("events"),
+    })
 }
 
 async fn open(path: &std::path::Path) -> Result<sqlx::AnyPool> {
     sqlx::any::install_default_drivers();
-    Ok(AnyPoolOptions::new().max_connections(1).connect(&format!("sqlite://{}?mode=rwc", path.display())).await?)
+    Ok(AnyPoolOptions::new()
+        .max_connections(1)
+        .connect(&format!("sqlite://{}?mode=rwc", path.display()))
+        .await?)
 }
 
 pub async fn to_sqlite(data: &ChangeSet, device_id: &str) -> Result<Vec<u8>> {
     let path = temp_path();
     let result = async {
         let pool = open(&path).await?;
-        for stmt in EXPORT_SCHEMA.split(';').map(str::trim).filter(|s| !s.is_empty()) {
-            sqlx::query(stmt).execute(&pool).await.with_context(|| stmt.to_string())?;
+        for stmt in EXPORT_SCHEMA
+            .split(';')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            sqlx::query(stmt)
+                .execute(&pool)
+                .await
+                .with_context(|| stmt.to_string())?;
         }
         for (k, v) in [
             ("schema_version", SCHEMA_VERSION.to_string()),
@@ -72,7 +92,11 @@ pub async fn to_sqlite(data: &ChangeSet, device_id: &str) -> Result<Vec<u8>> {
             ("device_id", device_id.to_string()),
             ("created_at", crate::db::now()),
         ] {
-            sqlx::query("INSERT INTO meta (key, value) VALUES ($1, $2)").bind(k).bind(v).execute(&pool).await?;
+            sqlx::query("INSERT INTO meta (key, value) VALUES ($1, $2)")
+                .bind(k)
+                .bind(v)
+                .execute(&pool)
+                .await?;
         }
         let mut tx = pool.begin().await?;
         for table in TABLES {
@@ -81,8 +105,14 @@ pub async fn to_sqlite(data: &ChangeSet, device_id: &str) -> Result<Vec<u8>> {
                 let cols: Vec<&String> = row.keys().collect();
                 let sql = format!(
                     "INSERT INTO {table} ({}) VALUES ({})",
-                    cols.iter().map(|c| c.as_str()).collect::<Vec<_>>().join(", "),
-                    (1..=cols.len()).map(|i| format!("${i}")).collect::<Vec<_>>().join(", ")
+                    cols.iter()
+                        .map(|c| c.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    (1..=cols.len())
+                        .map(|i| format!("${i}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 );
                 let mut q = sqlx::query(&sql);
                 for c in &cols {
@@ -113,17 +143,21 @@ pub async fn from_sqlite(bytes: &[u8]) -> Result<ChangeSet> {
     std::fs::write(&path, bytes)?;
     let result = async {
         let pool = open(&path).await?;
-        let tables: Vec<String> = sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table'")
-            .fetch_all(&pool)
-            .await?
-            .iter()
-            .map(|r| r.get::<String, _>("name"))
-            .collect();
+        let tables: Vec<String> =
+            sqlx::query("SELECT name FROM sqlite_master WHERE type = 'table'")
+                .fetch_all(&pool)
+                .await?
+                .iter()
+                .map(|r| r.get::<String, _>("name"))
+                .collect();
         if !tables.iter().any(|t| t == "tracker") || !tables.iter().any(|t| t == "event") {
             bail!("ce fichier n'est pas un export LifeLog");
         }
         if tables.iter().any(|t| t == "meta") {
-            if let Some(r) = sqlx::query("SELECT value FROM meta WHERE key = 'schema_version'").fetch_optional(&pool).await? {
+            if let Some(r) = sqlx::query("SELECT value FROM meta WHERE key = 'schema_version'")
+                .fetch_optional(&pool)
+                .await?
+            {
                 let v: String = r.get("value");
                 if v.parse::<i64>().unwrap_or(0) > SCHEMA_VERSION {
                     bail!("ce fichier vient d'une version plus récente de LifeLog");
@@ -136,9 +170,12 @@ pub async fn from_sqlite(bytes: &[u8]) -> Result<ChangeSet> {
                 continue;
             }
             // Lecture en JSON côté SQLite : types préservés sans dépendre du pilote.
-            let rows = sqlx::query(&format!("SELECT json_object({}) AS j FROM {table}", json_cols(table)))
-                .fetch_all(&pool)
-                .await?;
+            let rows = sqlx::query(&format!(
+                "SELECT json_object({}) AS j FROM {table}",
+                json_cols(table)
+            ))
+            .fetch_all(&pool)
+            .await?;
             for r in rows {
                 let j: String = r.get("j");
                 if let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&j) {
@@ -161,18 +198,57 @@ pub async fn from_sqlite(bytes: &[u8]) -> Result<ChangeSet> {
 fn json_cols(table: &str) -> String {
     let cols: &[&str] = match table {
         "tracker" => &[
-            "id", "name", "icon", "color", "polarity", "display_mode", "goal_kind", "goal_count", "goal_period", "sort_order",
-            "archived_at", "created_at", "updated_at", "deleted_at", "device_id",
+            "id",
+            "name",
+            "icon",
+            "color",
+            "polarity",
+            "display_mode",
+            "goal_kind",
+            "goal_count",
+            "goal_period",
+            "sort_order",
+            "archived_at",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+            "device_id",
         ],
-        "tracker_field" => &["id", "tracker_id", "name", "unit", "sort_order", "created_at", "updated_at", "deleted_at", "device_id"],
-        _ => &["id", "tracker_id", "occurred_at", "tz_offset", "measures", "note", "created_at", "updated_at", "deleted_at", "device_id"],
+        "tracker_field" => &[
+            "id",
+            "tracker_id",
+            "name",
+            "unit",
+            "sort_order",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+            "device_id",
+        ],
+        _ => &[
+            "id",
+            "tracker_id",
+            "occurred_at",
+            "tz_offset",
+            "measures",
+            "note",
+            "created_at",
+            "updated_at",
+            "deleted_at",
+            "device_id",
+        ],
     };
-    cols.iter().map(|c| format!("'{c}', {c}")).collect::<Vec<_>>().join(", ")
+    cols.iter()
+        .map(|c| format!("'{c}', {c}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 pub fn parse_any(bytes: &[u8]) -> Result<Option<Value>> {
     if bytes.starts_with(b"SQLite format 3\0") {
         return Ok(None);
     }
-    serde_json::from_slice(bytes).map(Some).context("format de fichier non reconnu")
+    serde_json::from_slice(bytes)
+        .map(Some)
+        .context("format de fichier non reconnu")
 }

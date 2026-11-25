@@ -16,10 +16,14 @@ async fn backends() -> Vec<(String, AppState)> {
         urls.push(pg);
     }
     for url in urls {
-        let mut file = FileConfig::default();
-        file.database_url = Some(url.clone());
-        file.public_url = Some("https://lifelog.example.org".into());
-        let state = AppState::new(Config::from_parts(file).unwrap()).await.unwrap();
+        let file = FileConfig {
+            database_url: Some(url.clone()),
+            public_url: Some("https://lifelog.example.org".into()),
+            ..Default::default()
+        };
+        let state = AppState::new(Config::from_parts(file).unwrap())
+            .await
+            .unwrap();
         out.push((url, state));
     }
     out
@@ -31,7 +35,13 @@ struct Client {
 }
 
 impl Client {
-    async fn req(&self, method: &str, uri: &str, body: Option<Value>, auth: Option<&str>) -> (StatusCode, Value, Vec<u8>) {
+    async fn req(
+        &self,
+        method: &str,
+        uri: &str,
+        body: Option<Value>,
+        auth: Option<&str>,
+    ) -> (StatusCode, Value, Vec<u8>) {
         let mut b = Request::builder().method(method).uri(uri);
         if let Some(c) = &self.cookie {
             b = b.header("cookie", c);
@@ -40,7 +50,10 @@ impl Client {
             b = b.header("authorization", format!("Bearer {a}"));
         }
         let req = match body {
-            Some(v) => b.header("content-type", "application/json").body(Body::from(v.to_string())).unwrap(),
+            Some(v) => b
+                .header("content-type", "application/json")
+                .body(Body::from(v.to_string()))
+                .unwrap(),
             None => b.body(Body::empty()).unwrap(),
         };
         let res = self.app.clone().oneshot(req).await.unwrap();
@@ -54,7 +67,10 @@ impl Client {
 async fn login(state: &AppState) -> Client {
     let user = state.db.create_user(Some("Alex")).await.unwrap();
     let token = state.db.create_session(&user.id).await.unwrap();
-    Client { app: router(state.clone()), cookie: Some(format!("lifelog_session={token}")) }
+    Client {
+        app: router(state.clone()),
+        cookie: Some(format!("lifelog_session={token}")),
+    }
 }
 
 fn tracker(id: &str, name: &str, hlc: &str) -> Value {
@@ -84,15 +100,24 @@ fn event(id: &str, tracker_id: &str, hlc: &str) -> Value {
 async fn sync_push_pull_merge() {
     for (url, state) in backends().await {
         let c = login(&state).await;
-        let anon = Client { app: router(state.clone()), cookie: None };
-        assert_eq!(anon.req("GET", "/api/v1/changes", None, None).await.0, StatusCode::UNAUTHORIZED, "{url}");
+        let anon = Client {
+            app: router(state.clone()),
+            cookie: None,
+        };
+        assert_eq!(
+            anon.req("GET", "/api/v1/changes", None, None).await.0,
+            StatusCode::UNAUTHORIZED,
+            "{url}"
+        );
 
         let changes = json!({ "changes": {
             "tracker": [tracker("t1", "Course", "1795600000000-0000-dev1")],
             "tracker_field": [field("f1", "t1", "Distance", "km")],
             "event": [event("e1", "t1", "1795600000001-0000-dev1"), event("e2", "t1", "1795600000002-0000-dev1"), {"id": "bad"}],
         }});
-        let (s, v, _) = c.req("POST", "/api/v1/changes", Some(changes.clone()), None).await;
+        let (s, v, _) = c
+            .req("POST", "/api/v1/changes", Some(changes.clone()), None)
+            .await;
         assert_eq!(s, StatusCode::OK, "{url} {v}");
         assert_eq!(v["summary"]["inserted"], 4, "{url}");
         assert_eq!(v["summary"]["ignored"], 1, "{url}");
@@ -114,7 +139,14 @@ async fn sync_push_pull_merge() {
         let mut cursor = 0;
         let mut seen = Vec::new();
         loop {
-            let (s, v, _) = c.req("GET", &format!("/api/v1/changes?since={cursor}&limit=2"), None, None).await;
+            let (s, v, _) = c
+                .req(
+                    "GET",
+                    &format!("/api/v1/changes?since={cursor}&limit=2"),
+                    None,
+                    None,
+                )
+                .await;
             assert_eq!(s, StatusCode::OK);
             for t in ["tracker", "tracker_field", "event"] {
                 for r in v["changes"][t].as_array().unwrap() {
@@ -135,8 +167,14 @@ async fn sync_push_pull_merge() {
 
         // Isolation entre utilisateurs.
         let other = login(&state).await;
-        let (_, v, _) = other.req("GET", "/api/v1/changes?since=0", None, None).await;
-        assert_eq!(v["changes"]["tracker"].as_array().unwrap().len(), 0, "{url}");
+        let (_, v, _) = other
+            .req("GET", "/api/v1/changes?since=0", None, None)
+            .await;
+        assert_eq!(
+            v["changes"]["tracker"].as_array().unwrap().len(),
+            0,
+            "{url}"
+        );
     }
 }
 
@@ -150,15 +188,30 @@ async fn tokens_webhooks_export_import() {
         }});
         c.req("POST", "/api/v1/changes", Some(push), None).await;
 
-        let (s, v, _) = c.req("POST", "/api/v1/tokens", Some(json!({"name": "Raccourci", "scope": "webhook", "tracker_id": "t1"})), None).await;
+        let (s, v, _) = c
+            .req(
+                "POST",
+                "/api/v1/tokens",
+                Some(json!({"name": "Raccourci", "scope": "webhook", "tracker_id": "t1"})),
+                None,
+            )
+            .await;
         assert_eq!(s, StatusCode::CREATED, "{url} {v}");
         let secret = v["secret"].as_str().unwrap().to_string();
         assert!(secret.starts_with("lt_") && secret.len() > 40);
-        assert!(v["webhook_url"].as_str().unwrap().starts_with("https://lifelog.example.org/hooks/lt_"));
+        assert!(v["webhook_url"]
+            .as_str()
+            .unwrap()
+            .starts_with("https://lifelog.example.org/hooks/lt_"));
 
-        let anon = Client { app: router(state.clone()), cookie: None };
+        let anon = Client {
+            app: router(state.clone()),
+            cookie: None,
+        };
         // Webhook par URL, corps vide.
-        let (s, _, _) = anon.req("POST", &format!("/hooks/{secret}"), None, None).await;
+        let (s, _, _) = anon
+            .req("POST", &format!("/hooks/{secret}"), None, None)
+            .await;
         assert_eq!(s, StatusCode::CREATED, "{url}");
         // Webhook par en-tête, mesures par nom.
         let (s, v, _) = anon
@@ -169,18 +222,47 @@ async fn tokens_webhooks_export_import() {
         assert_eq!(m["sys"], 12.5);
         assert_eq!(m["dia"], 8.2);
         // Mauvais jeton, mesure inconnue, portée insuffisante.
-        assert_eq!(anon.req("POST", "/hooks/lt_nope", None, None).await.0, StatusCode::NOT_FOUND);
-        assert_eq!(anon.req("POST", "/hooks", Some(json!({"measures": {"x": 1}})), Some(&secret)).await.0, StatusCode::BAD_REQUEST);
-        assert_eq!(anon.req("GET", "/api/v1/export", None, Some(&secret)).await.0, StatusCode::FORBIDDEN);
+        assert_eq!(
+            anon.req("POST", "/hooks/lt_nope", None, None).await.0,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            anon.req(
+                "POST",
+                "/hooks",
+                Some(json!({"measures": {"x": 1}})),
+                Some(&secret)
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            anon.req("GET", "/api/v1/export", None, Some(&secret))
+                .await
+                .0,
+            StatusCode::FORBIDDEN
+        );
 
         // Jeton d'export.
-        let (_, v, _) = c.req("POST", "/api/v1/tokens", Some(json!({"name": "Backup", "scope": "export:read"})), None).await;
+        let (_, v, _) = c
+            .req(
+                "POST",
+                "/api/v1/tokens",
+                Some(json!({"name": "Backup", "scope": "export:read"})),
+                None,
+            )
+            .await;
         let exp = v["secret"].as_str().unwrap().to_string();
-        let (s, json_export, _) = anon.req("GET", "/api/v1/export?format=json", None, Some(&exp)).await;
+        let (s, json_export, _) = anon
+            .req("GET", "/api/v1/export?format=json", None, Some(&exp))
+            .await;
         assert_eq!(s, StatusCode::OK);
         assert_eq!(json_export["format"], "lifelog");
         assert_eq!(json_export["events"].as_array().unwrap().len(), 2, "{url}");
-        let (s, _, sqlite) = anon.req("GET", "/api/v1/export?format=sqlite", None, Some(&exp)).await;
+        let (s, _, sqlite) = anon
+            .req("GET", "/api/v1/export?format=sqlite", None, Some(&exp))
+            .await;
         assert_eq!(s, StatusCode::OK);
         assert!(sqlite.starts_with(b"SQLite format 3\0"));
 
@@ -194,19 +276,32 @@ async fn tokens_webhooks_export_import() {
             .unwrap();
         let res = other.app.clone().oneshot(req).await.unwrap();
         let st = res.status();
-        let body: Value = serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        let body: Value =
+            serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
         assert_eq!(st, StatusCode::OK, "{url} {body}");
         assert_eq!(body["summary"]["inserted"], 5, "{url} {body}");
         // Et l'import JSON est idempotent.
-        let (_, v, _) = other.req("POST", "/api/v1/import", Some(json_export), None).await;
+        let (_, v, _) = other
+            .req("POST", "/api/v1/import", Some(json_export), None)
+            .await;
         assert_eq!(v["summary"]["inserted"], 0, "{url} {v}");
 
         // Révocation.
         let (_, v, _) = c.req("GET", "/api/v1/tokens", None, None).await;
         let id = v["tokens"][0]["id"].as_str().unwrap().to_string();
         assert!(v["tokens"][0]["last_used_at"].is_string());
-        assert_eq!(c.req("DELETE", &format!("/api/v1/tokens/{id}"), None, None).await.0, StatusCode::NO_CONTENT);
-        assert_eq!(anon.req("POST", &format!("/hooks/{secret}"), None, None).await.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            c.req("DELETE", &format!("/api/v1/tokens/{id}"), None, None)
+                .await
+                .0,
+            StatusCode::NO_CONTENT
+        );
+        assert_eq!(
+            anon.req("POST", &format!("/hooks/{secret}"), None, None)
+                .await
+                .0,
+            StatusCode::NOT_FOUND
+        );
     }
 }
 
@@ -227,14 +322,29 @@ async fn health_and_registration_config() {
     )
     .unwrap();
     file.auth.oidc = toml_cfg.auth.oidc;
-    let state = AppState::new(Config::from_parts(file).unwrap()).await.unwrap();
-    let c = Client { app: router(state.clone()), cookie: None };
+    let state = AppState::new(Config::from_parts(file).unwrap())
+        .await
+        .unwrap();
+    let c = Client {
+        app: router(state.clone()),
+        cookie: None,
+    };
     let (_, v, _) = c.req("GET", "/api/v1/health", None, None).await;
     assert_eq!(v["auth"]["registration"], false);
     assert_eq!(v["auth"]["passkey_registration"], false);
     assert_eq!(v["auth"]["oidc"][0]["name"], "Pocket ID");
     // Inscription par passkey refusée quand fermée.
-    assert_eq!(c.req("POST", "/auth/passkey/register/start", Some(json!({})), None).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(
+        c.req(
+            "POST",
+            "/auth/passkey/register/start",
+            Some(json!({})),
+            None
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
     // Connexion par passkey : le défi est généré.
     let (s, v, _) = c.req("POST", "/auth/passkey/login/start", None, None).await;
     assert_eq!(s, StatusCode::OK);

@@ -1,0 +1,2 @@
+# Ne pas installer de version publiée depuis moins d'un jour (protection chaîne d'approvisionnement).
+minimumReleaseAge: 1440

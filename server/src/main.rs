@@ -14,7 +14,10 @@ struct Cli {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,tower_http=warn,sqlx=warn")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info,tower_http=warn,sqlx=warn")),
+        )
         .init();
     let cli = Cli::parse();
     let config = lifelog_server::config::Config::load()?;
@@ -38,9 +41,10 @@ async fn main() -> anyhow::Result<()> {
     let app = lifelog_server::router(state);
     let listener = tokio::net::TcpListener::bind(&listen).await?;
     tracing::info!("LifeLog écoute sur http://{listen}");
-    axum::serve(listener, app).with_graceful_shutdown(async {
-        let _ = tokio::signal::ctrl_c().await;
-    })
-    .await?;
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await?;
     Ok(())
 }

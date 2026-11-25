@@ -120,9 +120,13 @@ pub fn sanitize(table: &str, raw: &Row) -> Option<Row> {
     for (col, ty) in columns(table) {
         let v = raw.get(*col).cloned().unwrap_or(Value::Null);
         let v = match (ty, v) {
-            (Ty::Text, Value::String(s)) if !s.is_empty() || *col == "device_id" => Value::String(s),
+            (Ty::Text, Value::String(s)) if !s.is_empty() || *col == "device_id" => {
+                Value::String(s)
+            }
             (Ty::Text, _) => return None,
-            (Ty::OptText, Value::Object(o)) if *col == "measures" => Value::String(Value::Object(o).to_string()),
+            (Ty::OptText, Value::Object(o)) if *col == "measures" => {
+                Value::String(Value::Object(o).to_string())
+            }
             (Ty::OptText, v @ (Value::String(_) | Value::Null)) => v,
             (Ty::OptText, _) => return None,
             (Ty::Int, Value::Number(n)) => Value::from(n.as_f64()? as i64),
@@ -190,8 +194,12 @@ impl Db {
             // SQLite : un seul écrivain, et les clés étrangères à activer par connexion.
             opts = opts.max_connections(1).after_connect(|conn, _| {
                 Box::pin(async move {
-                    sqlx::query("PRAGMA foreign_keys = ON").execute(&mut *conn).await?;
-                    sqlx::query("PRAGMA journal_mode = WAL").execute(&mut *conn).await?;
+                    sqlx::query("PRAGMA foreign_keys = ON")
+                        .execute(&mut *conn)
+                        .await?;
+                    sqlx::query("PRAGMA journal_mode = WAL")
+                        .execute(&mut *conn)
+                        .await?;
                     Ok(())
                 })
             });
@@ -208,11 +216,15 @@ impl Db {
         let mut conn = self.pool.acquire().await?;
         // PostgreSQL : un seul processus migre à la fois.
         if self.backend == Backend::Postgres {
-            sqlx::query("SELECT pg_advisory_lock(7419221)").execute(&mut *conn).await?;
+            sqlx::query("SELECT pg_advisory_lock(7419221)")
+                .execute(&mut *conn)
+                .await?;
         }
         let result = self.migrate_on(&mut conn).await;
         if self.backend == Backend::Postgres {
-            sqlx::query("SELECT pg_advisory_unlock(7419221)").execute(&mut *conn).await?;
+            sqlx::query("SELECT pg_advisory_unlock(7419221)")
+                .execute(&mut *conn)
+                .await?;
         }
         result
     }
@@ -221,12 +233,13 @@ impl Db {
         sqlx::query("CREATE TABLE IF NOT EXISTS lifelog_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)")
             .execute(&mut *conn)
             .await?;
-        let done: Vec<i64> = sqlx::query("SELECT CAST(version AS BIGINT) AS v FROM lifelog_migrations")
-            .fetch_all(&mut *conn)
-            .await?
-            .iter()
-            .map(|r| r.get::<i64, _>("v"))
-            .collect();
+        let done: Vec<i64> =
+            sqlx::query("SELECT CAST(version AS BIGINT) AS v FROM lifelog_migrations")
+                .fetch_all(&mut *conn)
+                .await?
+                .iter()
+                .map(|r| r.get::<i64, _>("v"))
+                .collect();
         let list = match self.backend {
             Backend::Postgres => PG_MIGRATIONS,
             Backend::Sqlite => SQLITE_MIGRATIONS,
@@ -262,16 +275,21 @@ impl Db {
         let mut tx = self.pool.begin().await?;
         // Verrouille le compteur de séquence : les poussées sont sérialisées, et l'ordre
         // des server_seq suit l'ordre de validation (aucune ligne « sautée » au pull).
-        sqlx::query("UPDATE seq_counter SET value = value WHERE id = 1").execute(&mut *tx).await?;
+        sqlx::query("UPDATE seq_counter SET value = value WHERE id = 1")
+            .execute(&mut *tx)
+            .await?;
         for table in TABLES {
             let cols = columns(table);
             let names: Vec<&str> = cols.iter().map(|(c, _)| *c).collect();
-            let placeholders: Vec<String> = (1..=names.len() + 2).map(|i| format!("${i}")).collect();
+            let placeholders: Vec<String> =
+                (1..=names.len() + 2).map(|i| format!("${i}")).collect();
             let set: Vec<String> = names
                 .iter()
                 .filter(|c| **c != "id")
                 .map(|c| format!("{c} = excluded.{c}"))
-                .chain(std::iter::once("server_seq = excluded.server_seq".to_string()))
+                .chain(std::iter::once(
+                    "server_seq = excluded.server_seq".to_string(),
+                ))
                 .collect();
             let sql = format!(
                 "INSERT INTO {table} (user_id, {}, server_seq) VALUES ({}) ON CONFLICT (user_id, id) DO UPDATE SET {}",
@@ -286,21 +304,24 @@ impl Db {
                 };
                 let id = row["id"].as_str().unwrap_or_default();
                 let updated_at = row["updated_at"].as_str().unwrap_or_default();
-                let current: Option<String> =
-                    sqlx::query(&format!("SELECT updated_at FROM {table} WHERE user_id = $1 AND id = $2"))
-                        .bind(user_id)
-                        .bind(id)
-                        .fetch_optional(&mut *tx)
-                        .await?
-                        .map(|r| r.get::<String, _>("updated_at"));
+                let current: Option<String> = sqlx::query(&format!(
+                    "SELECT updated_at FROM {table} WHERE user_id = $1 AND id = $2"
+                ))
+                .bind(user_id)
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await?
+                .map(|r| r.get::<String, _>("updated_at"));
                 if matches!(&current, Some(c) if c.as_str() >= updated_at) {
                     sum.ignored += 1;
                     continue;
                 }
-                let seq: i64 = sqlx::query("UPDATE seq_counter SET value = value + 1 WHERE id = 1 RETURNING value")
-                    .fetch_one(&mut *tx)
-                    .await?
-                    .get::<i64, _>("value");
+                let seq: i64 = sqlx::query(
+                    "UPDATE seq_counter SET value = value + 1 WHERE id = 1 RETURNING value",
+                )
+                .fetch_one(&mut *tx)
+                .await?
+                .get::<i64, _>("value");
                 let mut q = sqlx::query(&sql).bind(user_id);
                 for (col, ty) in cols {
                     let v = &row[*col];
@@ -323,7 +344,12 @@ impl Db {
     }
 
     /// Lignes de l'utilisateur avec `server_seq > cursor`, par ordre de séquence.
-    pub async fn changes_since(&self, user_id: &str, cursor: i64, limit: i64) -> Result<(ChangeSet, i64, bool)> {
+    pub async fn changes_since(
+        &self,
+        user_id: &str,
+        cursor: i64,
+        limit: i64,
+    ) -> Result<(ChangeSet, i64, bool)> {
         let mut all: Vec<(i64, &str, Row)> = Vec::new();
         let mut truncated = false;
         for table in TABLES {
@@ -358,10 +384,12 @@ impl Db {
     pub async fn snapshot(&self, user_id: &str) -> Result<ChangeSet> {
         let mut out = ChangeSet::default();
         for table in TABLES {
-            let rows = sqlx::query(&format!("SELECT * FROM {table} WHERE user_id = $1 ORDER BY server_seq"))
-                .bind(user_id)
-                .fetch_all(&self.pool)
-                .await?;
+            let rows = sqlx::query(&format!(
+                "SELECT * FROM {table} WHERE user_id = $1 ORDER BY server_seq"
+            ))
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
             for r in &rows {
                 out.table_mut(table).push(decode(table, r)?);
             }
@@ -370,16 +398,22 @@ impl Db {
     }
 
     pub async fn tracker_exists(&self, user_id: &str, tracker_id: &str) -> Result<bool> {
-        Ok(sqlx::query("SELECT id FROM tracker WHERE user_id = $1 AND id = $2 AND deleted_at IS NULL")
-            .bind(user_id)
-            .bind(tracker_id)
-            .fetch_optional(&self.pool)
-            .await?
-            .is_some())
+        Ok(sqlx::query(
+            "SELECT id FROM tracker WHERE user_id = $1 AND id = $2 AND deleted_at IS NULL",
+        )
+        .bind(user_id)
+        .bind(tracker_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .is_some())
     }
 
     /// Champs de mesure d'un compteur : (id, nom).
-    pub async fn tracker_fields(&self, user_id: &str, tracker_id: &str) -> Result<Vec<(String, String)>> {
+    pub async fn tracker_fields(
+        &self,
+        user_id: &str,
+        tracker_id: &str,
+    ) -> Result<Vec<(String, String)>> {
         Ok(sqlx::query("SELECT id, name FROM tracker_field WHERE user_id = $1 AND tracker_id = $2 AND deleted_at IS NULL")
             .bind(user_id)
             .bind(tracker_id)
@@ -395,9 +429,18 @@ fn decode(table: &str, r: &AnyRow) -> Result<Row> {
     let mut out = Map::new();
     for (col, ty) in columns(table) {
         let v = match ty {
-            Ty::Text | Ty::OptText => r.try_get::<Option<String>, _>(*col)?.map(Value::from).unwrap_or(Value::Null),
-            Ty::Int | Ty::OptInt => r.try_get::<Option<i64>, _>(*col)?.map(Value::from).unwrap_or(Value::Null),
-            Ty::Real => r.try_get::<Option<f64>, _>(*col)?.map(Value::from).unwrap_or(Value::Null),
+            Ty::Text | Ty::OptText => r
+                .try_get::<Option<String>, _>(*col)?
+                .map(Value::from)
+                .unwrap_or(Value::Null),
+            Ty::Int | Ty::OptInt => r
+                .try_get::<Option<i64>, _>(*col)?
+                .map(Value::from)
+                .unwrap_or(Value::Null),
+            Ty::Real => r
+                .try_get::<Option<f64>, _>(*col)?
+                .map(Value::from)
+                .unwrap_or(Value::Null),
         };
         out.insert((*col).to_string(), v);
     }
