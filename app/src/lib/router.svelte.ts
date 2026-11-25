@@ -33,6 +33,11 @@ export function go(path: string) {
   location.hash = '#/' + path.replace(/^\//, '');
 }
 
+/** Change d'écran sans ajouter d'entrée à l'historique (la flèche retour l'ignore). */
+export function replace(path: string) {
+  location.replace('#/' + path.replace(/^\//, ''));
+}
+
 export function back() {
   if (history.length > 1) history.back();
   else go('');
