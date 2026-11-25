@@ -128,6 +128,37 @@ impl Db {
     }
 
     /// Utilisateur lié à une identité (fournisseur, sujet), et met à jour sa date d'utilisation.
+    /// Renseigne le nom du compte et le libellé de l'identité s'ils sont encore vides.
+    pub async fn fill_profile(
+        &self,
+        user_id: &str,
+        provider: &str,
+        subject: &str,
+        name: Option<&str>,
+        email: Option<&str>,
+    ) -> Result<()> {
+        if let Some(name) = name {
+            sqlx::query(
+                "UPDATE app_user SET display_name = $1 WHERE id = $2 AND display_name IS NULL",
+            )
+            .bind(name)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
+        }
+        if let Some(email) = email {
+            sqlx::query(
+                "UPDATE identity SET label = $1 WHERE provider = $2 AND subject = $3 AND label IS NULL",
+            )
+            .bind(email)
+            .bind(provider)
+            .bind(subject)
+            .execute(&self.pool)
+            .await?;
+        }
+        Ok(())
+    }
+
     pub async fn find_identity(
         &self,
         provider: &str,
