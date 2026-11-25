@@ -228,6 +228,7 @@ export const en: Record<Key, string> = {
   'settings.trash.purgeConfirm': 'Delete “{name}” and its {n} event(s) for good? This cannot be undone, including on your other synced devices.',
   'settings.trash.purged': '“{name}” deleted for good',
   'settings.import.stillDeleted': '{n} tracker(s) from the file were deleted since: they are in the trash, where you can restore them.',
+  'login.intro': 'This LifeLog is hosted on {host}. Sign in to get your trackers and store them on this server.',
   'about.title': 'About LifeLog',
   'about.more': 'Learn more',
   'about.idea': 'LifeLog turns everyday events into stats and achievements, like in a video game. Good or bad habits: you log, the app counts.',
