@@ -42,6 +42,9 @@ export const en: Record<Key, string> = {
   'form.templates': 'Examples',
   'form.templatesHelp': 'Optional: an example pre-fills the form, which you can then change. Or just fill it in yourself.',
   'form.templateBlank': 'Blank',
+  'form.iconHelp': 'Type an emoji with your keyboard (on mobile: the emoji keyboard), or browse the full searchable list.',
+  'form.iconChoose': 'Choose…',
+  'form.iconClose': 'Close',
 
   'form.newTitle': 'New tracker',
   'form.editTitle': 'Edit tracker',

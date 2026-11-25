@@ -4,6 +4,7 @@
   import { t } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
   import { PALETTE, TEMPLATES, UNIT_SUGGESTIONS } from '../../lib/templates';
+  import EmojiPicker from '../components/EmojiPicker.svelte';
   import { toast } from '../../lib/state.svelte';
   import type { DisplayMode, GoalKind, Period, Polarity } from '../../lib/types';
 
@@ -30,7 +31,6 @@
   );
   let busy = $state(false);
 
-  const ICONS = ['🚬', '🍷', '🍺', '☕', '🍫', '🏃', '🚴', '🏊', '🧘', '💪', '💧', '😴', '🩺', '💊', '📚', '🎮', '📱', '🚽', '🧹', '💸', '🤬', '❤️', '⭐', '🎯'];
 
   function setPolarity(p: Polarity) {
     polarity = p;
@@ -108,14 +108,7 @@
 
       <div class="field">
         <span>{t('form.icon')}</span>
-        <div class="row">
-          <input type="text" bind:value={icon} maxlength="8" style="width:72px;text-align:center;font-size:1.3rem" aria-label={t('form.icon')} />
-          <div class="icons">
-            {#each ICONS as i (i)}
-              <button type="button" class="ico" aria-pressed={icon === i} onclick={() => (icon = i)}>{i}</button>
-            {/each}
-          </div>
-        </div>
+        <EmojiPicker bind:value={icon} />
       </div>
 
       <div class="field">
@@ -202,9 +195,6 @@
   .templates p { margin: 4px 0 10px; }
   a.btn[aria-current='true'] { border-color: var(--accent); outline: 2px solid var(--accent); }
   a.btn[aria-current='true'] { border-color: var(--accent); }
-  .icons { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
-  .ico { width: 40px; height: 40px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
-  .ico[aria-pressed='true'] { border-color: var(--accent); background: var(--surface); }
   .swatch { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--bg); outline: 1px solid var(--border); cursor: pointer; }
   .swatch[aria-pressed='true'] { outline: 3px solid var(--text); }
   a.btn { text-decoration: none; color: inherit; }
