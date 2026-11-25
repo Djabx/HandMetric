@@ -169,10 +169,18 @@ pub async fn from_sqlite(bytes: &[u8]) -> Result<ChangeSet> {
             if !tables.iter().any(|t| t == table) {
                 continue;
             }
+            // Colonnes présentes : un export plus ancien n'a pas les colonnes ajoutées depuis.
+            let present: Vec<String> =
+                sqlx::query(sqlx::AssertSqlSafe(format!("PRAGMA table_info({table})")))
+                    .fetch_all(&pool)
+                    .await?
+                    .iter()
+                    .map(|r| r.get::<String, _>("name"))
+                    .collect();
             // Lecture en JSON côté SQLite : types préservés sans dépendre du pilote.
             let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
                 "SELECT json_object({}) AS j FROM {table}",
-                json_cols(table)
+                json_cols(table, &present)
             )))
             .fetch_all(&pool)
             .await?;
@@ -195,7 +203,7 @@ pub async fn from_sqlite(bytes: &[u8]) -> Result<ChangeSet> {
     result
 }
 
-fn json_cols(table: &str) -> String {
+fn json_cols(table: &str, present: &[String]) -> String {
     let cols: &[&str] = match table {
         "tracker" => &[
             "id",
@@ -209,6 +217,7 @@ fn json_cols(table: &str) -> String {
             "goal_period",
             "sort_order",
             "archived_at",
+            "achievements",
             "created_at",
             "updated_at",
             "deleted_at",
@@ -239,6 +248,7 @@ fn json_cols(table: &str) -> String {
         ],
     };
     cols.iter()
+        .filter(|c| present.iter().any(|p| p == *c))
         .map(|c| format!("'{c}', {c}"))
         .collect::<Vec<_>>()
         .join(", ")

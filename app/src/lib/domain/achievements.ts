@@ -19,6 +19,29 @@ export interface Achievement {
 
 type Threshold = { value: number; unit: 'day' | 'month' | 'year' };
 
+/**
+ * Trophées activés pour ce compteur ? Par défaut oui, sauf pour les compteurs
+ * « neutres » (mesures comme la tension ou le poids), où ils n'ont pas de sens.
+ */
+export function achievementsEnabled(tracker: Pick<Tracker, 'achievements' | 'polarity'>): boolean {
+  if (tracker.achievements === 0 || tracker.achievements === 1) return tracker.achievements === 1;
+  return tracker.polarity !== 'neutral';
+}
+
+/**
+ * Paliers d'abstinence au-delà d'un an : 2, 3, 5, 10 ans, puis tous les 5 ans
+ * (pas un trophée chaque année pendant 20 ans).
+ */
+export function yearMilestones(upTo: number): number[] {
+  const out = [2, 3, 5, 10];
+  let y = 15;
+  while (out[out.length - 1] <= upTo) {
+    out.push(y);
+    y += 5;
+  }
+  return out.filter((v, i) => i === 0 || out[i - 1] <= upTo);
+}
+
 const ABSTINENCE: Threshold[] = [
   { value: 1, unit: 'day' },
   { value: 3, unit: 'day' },
@@ -46,13 +69,16 @@ function ratio(th: Threshold, from: number, to: number): number {
 /** Liste des succès d'un compteur, calculés à partir des statistiques. */
 export function achievements(tracker: Tracker, stats: TrackerStats, goal: GoalStatus | null): Achievement[] {
   const out: Achievement[] = [];
+  if (!achievementsEnabled(tracker)) return out;
+  // Compter ou enchaîner les occurrences n'est une réussite que pour un « bon » compteur :
+  // fumer 10 cigarettes ou prendre sa tension 10 fois ne mérite pas de trophée.
+  const good = tracker.polarity === 'good';
 
   if (tracker.display_mode === 'abstinence') {
-    // Paliers fixes, puis chaque année supplémentaire au-delà du record.
+    // Paliers fixes, puis 2, 3, 5, 10 ans et tous les 5 ans, jusqu'au prochain après le record.
     const longest = stats.longestGap;
     const years = longest ? Math.floor((longest.to - longest.from) / (365.25 * DAY)) : 0;
-    const thresholds = [...ABSTINENCE];
-    for (let y = 2; y <= Math.max(2, years + 1); y++) thresholds.push({ value: y, unit: 'year' });
+    const thresholds = [...ABSTINENCE, ...yearMilestones(years).map((value) => ({ value, unit: 'year' as const }))];
     const current = stats.gaps.find((g) => g.current);
     for (const th of thresholds) {
       const unlocked = stats.gaps.some((g) => reached(th, g.from, g.to));
@@ -69,11 +95,11 @@ export function achievements(tracker: Tracker, stats: TrackerStats, goal: GoalSt
     }
   }
 
-  for (const n of COUNTS) {
+  for (const n of good ? COUNTS : []) {
     out.push({ id: `count-${n}`, kind: 'count', value: n, unit: 'event', unlocked: stats.count >= n, active: false, progress: Math.min(1, stats.count / n) });
   }
 
-  if (tracker.display_mode === 'frequency') {
+  if (good && tracker.display_mode === 'frequency') {
     for (const n of STREAKS) {
       out.push({
         id: `streak-${n}`,

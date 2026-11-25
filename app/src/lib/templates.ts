@@ -12,6 +12,8 @@ export interface Template {
   display_mode: DisplayMode;
   goal?: { kind: GoalKind; count: number; period: Period };
   fields?: { name: Key; unit: string }[];
+  /** Trophées forcés (sinon : selon le type). */
+  achievements?: number;
 }
 
 export const PALETTE = ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#12a594', '#0090ff', '#6e56cf', '#d6409f', '#8d8d8d'];

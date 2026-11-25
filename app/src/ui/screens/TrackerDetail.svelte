@@ -239,6 +239,7 @@
       <div class="card"><Heatmap {cells} {color} /></div>
     </section>
 
+    {#if view.achievements.length}
     <section class="section">
       <h2>{t('detail.achievements')}</h2>
       <Achievements list={allAch ? view.achievements : visibleAch} />
@@ -246,6 +247,7 @@
         <button class="btn small" style="margin-top:8px" onclick={() => (allAch = true)}>{t('detail.more')}</button>
       {/if}
     </section>
+    {/if}
 
     <section class="section">
       <h2>{t('detail.history')}</h2>

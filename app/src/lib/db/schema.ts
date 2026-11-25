@@ -8,7 +8,7 @@ export type SyncTable = (typeof SYNC_TABLES)[number];
 export const COLUMNS: Record<SyncTable, readonly string[]> = {
   tracker: [
     'id', 'name', 'icon', 'color', 'polarity', 'display_mode',
-    'goal_kind', 'goal_count', 'goal_period', 'sort_order', 'archived_at',
+    'goal_kind', 'goal_count', 'goal_period', 'sort_order', 'archived_at', 'achievements',
     'created_at', 'updated_at', 'deleted_at', 'device_id',
   ],
   tracker_field: [
@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS tracker (
   goal_period  TEXT CHECK (goal_period IN ('day','week','month')),
   sort_order   REAL NOT NULL DEFAULT 0,
   archived_at  TEXT,
+  -- Trophées : NULL = selon le type de compteur, 0 = non, 1 = oui.
+  achievements INTEGER,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,
@@ -74,6 +76,11 @@ CREATE TABLE IF NOT EXISTS event (
 CREATE INDEX IF NOT EXISTS event_by_tracker_time ON event(tracker_id, occurred_at);
 CREATE INDEX IF NOT EXISTS event_by_updated ON event(updated_at);
 `;
+
+/** Colonnes ajoutées après la création du schéma : ajoutées aux bases existantes. */
+export const ADDED_COLUMNS: { table: SyncTable; column: string; type: string }[] = [
+  { table: 'tracker', column: 'achievements', type: 'INTEGER' },
+];
 
 /** Tables locales, jamais exportées ni synchronisées. */
 export const LOCAL_SCHEMA = `

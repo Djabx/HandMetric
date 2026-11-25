@@ -62,8 +62,11 @@ LifeLog est une **application pour soi**, pas une vitrine : rien n'est partagé 
 
 **Succès**
 - Paliers prédéfinis selon le mode :
-  - abstinence : 1 j, 3 j, 1 sem, 2 sem, 1 mois, 3 mois, 6 mois, 1 an, puis chaque année ;
-  - fréquence : 1, 10, 50, 100, 500, 1000 occurrences ; séries de 7, 30, 100 jours.
+  - abstinence : 1 j, 3 j, 1 sem, 2 sem, 1 mois, 3 mois, 6 mois, 1 an, 2, 3, 5, 10 ans, puis tous les 5 ans ;
+  - fréquence, compteur « bon » seulement : 1, 10, 50, 100, 500, 1000 occurrences ; séries de 7, 30, 100 jours ;
+  - objectif tenu : quel que soit le type.
+- Une occurrence d'un compteur « mauvais » ne donne jamais de trophée : on récompense le temps tenu sans.
+- Trophées activables par compteur (colonne `tracker.achievements` : NULL = selon le type, 0 = non, 1 = oui). Par défaut : activés, sauf pour un compteur « neutre » (mesures comme la tension).
 - Les succès sont **calculés** à partir des événements, jamais stockés comme vérité (voir 4.3).
 - Une notification dans l'application quand un succès est débloqué pendant que l'app est ouverte.
 
