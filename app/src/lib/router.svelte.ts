@@ -6,7 +6,7 @@ export type Route =
   | { name: 'settings' };
 
 function parse(hash: string): Route {
-  const path = hash.replace(/^#\/?/, '');
+  const path = hash.replace(/^#\/?/, '').split('?')[0];
   const [a, b, c] = path.split('/');
   if (a === 't' && b && c === 'edit') return { name: 'edit', id: b };
   if (a === 't' && b) return { name: 'tracker', id: b };
@@ -20,6 +20,12 @@ window.addEventListener('hashchange', () => {
   router.route = parse(location.hash);
   window.scrollTo(0, 0);
 });
+
+/** Paramètres après « ? » dans le hash (#/settings?auth_error=…). */
+export function hashParams(): URLSearchParams {
+  const i = location.hash.indexOf('?');
+  return new URLSearchParams(i >= 0 ? location.hash.slice(i + 1) : '');
+}
 
 export function go(path: string) {
   location.hash = '#/' + path.replace(/^\//, '');

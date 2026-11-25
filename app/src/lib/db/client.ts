@@ -7,7 +7,7 @@ class DbClient {
   private worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
   private next = 1;
   private pending = new Map<number, Pending>();
-  private listeners = new Set<() => void>();
+  private listeners = new Set<(remote: boolean) => void>();
 
   constructor() {
     this.worker.onmessage = (msg: MessageEvent<{ id: number; result?: unknown; error?: string }>) => {
@@ -34,11 +34,12 @@ class DbClient {
     return r;
   }
 
-  changed() {
-    for (const l of this.listeners) l();
+  /** `remote` : changements venus de la synchro (pas de nouvelle synchro, pas de toast). */
+  changed(remote = false) {
+    for (const l of this.listeners) l(remote);
   }
 
-  subscribe(fn: () => void): () => void {
+  subscribe(fn: (remote: boolean) => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
   }

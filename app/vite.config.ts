@@ -7,6 +7,10 @@ const base = process.env.LIFELOG_BASE ?? './';
 
 export default defineConfig({
   base,
+  define: {
+    // "solo" : version GitHub Pages, jamais de serveur. "auto" : détecte le serveur LifeLog.
+    __LIFELOG_MODE__: JSON.stringify(process.env.LIFELOG_MODE === 'solo' ? 'solo' : 'auto'),
+  },
   plugins: [
     svelte(),
     VitePWA({
