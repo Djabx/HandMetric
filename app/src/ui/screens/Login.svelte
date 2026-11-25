@@ -13,8 +13,12 @@
     <h1>{t('app.name')}</h1>
     <p class="muted">{t('app.tagline')}</p>
   </header>
-  <p>{t('login.intro', { host })}</p>
-  <SignIn />
+  <div class="server">
+    <span class="small muted">{t('login.server')}</span>
+    <h2>🏠 {host}</h2>
+    <p class="muted">{t('login.intro')}</p>
+  </div>
+  <SignIn intro={false} />
   <section class="card"><Intro /></section>
 </div>
 
@@ -24,4 +28,7 @@
   .brand img { border-radius: 14px; }
   .brand h1 { margin: 0; }
   .brand p { margin: 0; }
+  .server { display: grid; justify-items: center; gap: 4px; text-align: center; padding: 14px 16px; border-radius: 18px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .server h2 { margin: 0; font-size: 1.35rem; overflow-wrap: anywhere; }
+  .server p { margin: 2px 0 0; }
 </style>
