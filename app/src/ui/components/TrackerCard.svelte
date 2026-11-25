@@ -1,6 +1,8 @@
 <script lang="ts">
   import { db } from '../../lib/db/client';
-  import { humanDuration, sinceLabel, t } from '../../lib/i18n/index.svelte';
+  import { fmtNumber, fmtRelative, humanDuration, sinceLabel, t } from '../../lib/i18n/index.svelte';
+  import { TALLY_MAX, tileSize } from '../../lib/domain/tile';
+  import { unitLabel } from '../../lib/templates';
   import { toast, type TrackerView } from '../../lib/state.svelte';
   import { go } from '../../lib/router.svelte';
   import GoalBar from './GoalBar.svelte';
@@ -9,9 +11,40 @@
   let { view, now, onlog }: { view: TrackerView; now: number; onlog: (v: TrackerView) => void } = $props();
   const tr = $derived(view.tracker);
   const s = $derived(view.stats);
-  const wide = $derived(tr.display_mode === 'abstinence');
+  const size = $derived(tileSize(tr, view.fields.length));
+  const wide = $derived(size === 'wide');
+  const abstinence = $derived(tr.display_mode === 'abstinence');
+  /** Dernières saisies avec mesures, de la plus ancienne à la plus récente. */
+  const measured = $derived(
+    view.fields.length
+      ? view.events.filter((e) => e.measures && Object.keys(e.measures).length).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).slice(-12)
+      : [],
+  );
+  const last = $derived(measured.at(-1) ?? null);
+  /** « 12,5 / 8 » : une valeur par mesure ; l'unité seulement si elle est commune. */
+  const lastValue = $derived.by(() => {
+    if (!last) return '';
+    const vals = view.fields.map((f) => last.measures![f.id]).filter((n) => n !== undefined).map((n) => fmtNumber(n, 1));
+    const units = new Set(view.fields.map((f) => f.unit));
+    const u = units.size === 1 ? [...units][0] : null;
+    return vals.join(' / ') + (u ? ` ${unitLabel(u)}` : '');
+  });
+  /** Une courbe par mesure : échelle commune si même unité (tension), sinon chacune la sienne. */
+  const lines = $derived.by(() => {
+    if (measured.length < 2) return [];
+    const shared = new Set(view.fields.map((f) => f.unit)).size === 1;
+    const all = measured.flatMap((e) => Object.values(e.measures!));
+    return view.fields.map((f, i) => {
+      const pts = measured.map((e, x) => [x, e.measures![f.id]] as const).filter(([, y]) => y !== undefined);
+      const ys = shared ? all : pts.map(([, y]) => y);
+      const lo = Math.min(...ys), hi = Math.max(...ys);
+      const step = 100 / (measured.length - 1);
+      const d = pts.map(([x, y], k) => `${k ? 'L' : 'M'}${(x * step).toFixed(1)} ${(hi === lo ? 20 : 36 - ((y - lo) / (hi - lo)) * 32).toFixed(1)}`).join(' ');
+      return { d, faded: i > 0 };
+    });
+  });
   /** Petits objectifs : on les montre en bâtons plutôt qu'en barre. */
-  const tally = $derived(view.goal && view.goal.target > 0 && view.goal.target <= 15 ? view.goal : null);
+  const tally = $derived(view.goal && view.goal.target > 0 && view.goal.target <= TALLY_MAX ? view.goal : null);
   const tallyLabel = $derived(
     tally ? t('detail.goal.progress', { current: tally.current, target: tally.target, when: t(`period.this.${tally.period}`) }) : '',
   );
@@ -31,25 +64,38 @@
   }
 </script>
 
-<article class="tracker" class:wide style:--c={tr.color ?? 'var(--accent)'}>
+<article class="tracker {size}" style:--c={tr.color ?? 'var(--accent)'}>
   <button class="body" onclick={() => go(`t/${tr.id}`)} aria-label={tr.name}>
     <span class="head">
       <span class="icon" aria-hidden="true">{tr.icon ?? '•'}</span>
       <span class="name">{tr.name}</span>
     </span>
-    {#if wide}
+    {#if size === 'small'}
+      <span class="sub">
+        {#if abstinence}{humanDuration(s.currentGapFrom, now)}{:else if last}{lastValue}{:else}{t('dash.today', { n: s.today })}{/if}
+      </span>
+    {:else if abstinence}
       <span class="big">{humanDuration(s.currentGapFrom, now)}</span>
       <span class="sub">{sinceLabel(s.currentGapFrom, now, s.count === 0)}</span>
+    {:else if last && size !== 'normal'}
+      <span class="big">{lastValue}</span>
+      <span class="sub">{fmtRelative(Date.parse(last.occurred_at), now)}</span>
+      {#if lines.length}
+        <svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+          {#each lines as l, i (i)}<path d={l.d} style:stroke-opacity={l.faded ? 0.45 : 1} />{/each}
+        </svg>
+      {/if}
     {:else if tally}
       <Tally current={tally.current} target={tally.target} color="var(--c)" overColor="var(--bad)" label={tallyLabel} />
-      <span class="sub">{tallyLabel}</span>
+      <span class="big">{tally.current} / {tally.target}</span>
+      <span class="sub">{t(`period.this.${tally.period}`)}{#if s.currentStreak > 1} · 🔥 {t('dash.streak', { n: s.currentStreak })}{/if}</span>
     {:else}
       <span class="big">{t('dash.today', { n: s.today })}</span>
       <span class="sub">
         {t('dash.week', { n: s.thisWeek })}{#if s.currentStreak > 1} · 🔥 {t('dash.streak', { n: s.currentStreak })}{/if}
       </span>
     {/if}
-    {#if view.goal && !tally}
+    {#if view.goal && !tally && size !== 'small'}
       <GoalBar goal={view.goal} compact />
     {/if}
   </button>
@@ -59,12 +105,24 @@
 <style>
   .tracker {
     --tint: color-mix(in srgb, var(--c) 16%, var(--surface));
-    display: grid; grid-template-rows: 1fr auto; gap: 10px; padding: 14px;
+    display: grid; grid-template-rows: 1fr auto; gap: 10px; padding: 14px; min-width: 0;
+    grid-column: span 3;
     border-radius: var(--radius); background: var(--tint);
     transition: transform 0.15s;
   }
-  .tracker.wide { grid-column: span 2; grid-template-rows: none; grid-template-columns: 1fr auto; align-items: center; }
-  @media (max-width: 340px) { .tracker.wide { grid-column: auto; } }
+  /* Grille de l'accueil en 6 colonnes (12 sur grand écran) : voir Dashboard. */
+  .tracker.small { grid-column: span 2; padding: 12px; gap: 8px; }
+  .tracker.wide { grid-column: 1 / -1; grid-template-rows: none; grid-template-columns: 1fr auto; align-items: center; }
+  .tracker.tall { grid-row: span 2; }
+  @media (min-width: 760px) { .tracker.wide { grid-column: span 6; } }
+  .small .head { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .small .name { font-size: 0.9rem; max-width: 100%; }
+  .small .log { min-height: 34px; min-width: 52px; padding: 0 12px; font-size: 0.9rem; }
+  .tall .body { display: flex; flex-direction: column; gap: 8px; }
+  .tall .body .big { margin-top: auto; }
+  .tall :global(.tally) { height: 34px; }
+  .spark { width: 100%; height: 40px; fill: none; stroke: var(--c); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .spark path { vector-effect: non-scaling-stroke; }
   .body {
     min-width: 0; text-align: left; border: 0; background: none; cursor: pointer; padding: 0;
     display: grid; gap: 6px; align-content: start; color: inherit;

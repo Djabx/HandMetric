@@ -50,6 +50,7 @@ fn columns(table: &str) -> &'static [(&'static str, Ty)] {
             ("sort_order", Real),
             ("archived_at", OptText),
             ("achievements", OptInt),
+            ("tile", OptText),
             ("created_at", Text),
             ("updated_at", Text),
             ("deleted_at", OptText),
@@ -201,11 +202,13 @@ const PG_MIGRATIONS: &[&str] = &[
     include_str!("../migrations/postgres/0001_init.sql"),
     include_str!("../migrations/postgres/0002_achievements.sql"),
     include_str!("../migrations/postgres/0003_purge.sql"),
+    include_str!("../migrations/postgres/0004_tile.sql"),
 ];
 const SQLITE_MIGRATIONS: &[&str] = &[
     include_str!("../migrations/sqlite/0001_init.sql"),
     include_str!("../migrations/sqlite/0002_achievements.sql"),
     include_str!("../migrations/sqlite/0003_purge.sql"),
+    include_str!("../migrations/sqlite/0004_tile.sql"),
 ];
 
 impl Db {

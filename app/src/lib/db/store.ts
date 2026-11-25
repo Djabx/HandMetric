@@ -2,6 +2,7 @@ import {
   ADDED_COLUMNS, COLUMNS, DATA_SCHEMA, LOCAL_SCHEMA, PURGE_COLUMNS, PURGE_SCHEMA, PURGE_TABLES, SCHEMA_VERSION, SYNC_TABLES,
   type SyncTable,
 } from './schema';
+import { TILE_SIZES } from '../domain/tile';
 import { Hlc } from './hlc';
 import { newDeviceId, uuidv7 } from './ids';
 import type { Sql } from './sql';
@@ -133,6 +134,7 @@ export class Store {
       sort_order: existing?.sort_order ?? this.nextSortOrder(),
       archived_at: existing?.archived_at ?? null,
       achievements: input.achievements === undefined ? (existing?.achievements ?? null) : input.achievements,
+      tile: input.tile === undefined ? (existing?.tile ?? null) : input.tile,
       created_at: existing?.created_at ?? nowIso(),
       updated_at: stamp,
       deleted_at: null,
@@ -589,6 +591,7 @@ function sanitize(table: SyncTable, raw: Row): Row | null {
   if (typeof row.device_id !== 'string') return null;
   if (table === 'tracker' && row.sort_order === null) row.sort_order = 0;
   if (table === 'tracker' && row.achievements !== null && row.achievements !== 0 && row.achievements !== 1) row.achievements = null;
+  if (table === 'tracker' && row.tile !== null && !(TILE_SIZES as readonly unknown[]).includes(row.tile)) row.tile = null;
   if (table === 'tracker_field' && row.sort_order === null) row.sort_order = 0;
   if (table === 'event' && row.measures !== null) {
     try {

@@ -7,7 +7,8 @@
   import EmojiPicker from '../components/EmojiPicker.svelte';
   import UnitInput from '../components/UnitInput.svelte';
   import { toast } from '../../lib/state.svelte';
-  import type { DisplayMode, GoalKind, Period, Polarity } from '../../lib/types';
+  import type { DisplayMode, GoalKind, Period, Polarity, TileSize } from '../../lib/types';
+  import { TILE_SIZES, tileSize } from '../../lib/domain/tile';
   import { achievementsEnabled } from '../../lib/domain/achievements';
 
   let { id = null, template = null }: { id?: string | null; template?: string | null } = $props();
@@ -34,6 +35,13 @@
   /** Trophées : null = selon le type (désactivés pour un compteur neutre). */
   let trophies = $state<number | null>(existing?.achievements ?? tpl?.achievements ?? null);
   const trophiesOn = $derived(achievementsEnabled({ achievements: trophies, polarity }));
+  /** Taille de la tuile : null = automatique. */
+  let tile = $state<TileSize | null>(existing?.tile ?? null);
+  const autoTile = $derived(tileSize({ tile: null, display_mode: mode, goal_count: goalKind ? goalCount : null }, fields.length));
+  /** Schéma 6 × 2 de chaque taille : cases remplies. */
+  const MINI: Record<TileSize | 'auto', number[]> = {
+    auto: [], small: [0, 1], normal: [0, 1, 2], wide: [0, 1, 2, 3, 4, 5], tall: [0, 1, 2, 6, 7, 8],
+  };
   let busy = $state(false);
 
 
@@ -58,6 +66,7 @@
           goal_kind: goalKind || null,
           goal_count: goalKind ? goalCount : null,
           achievements: trophies,
+          tile,
           goal_period: goalKind ? goalPeriod : null,
         },
         $state.snapshot(fields).map((f) => ({ id: f.id, name: f.name, unit: f.unit || null })),
@@ -174,6 +183,21 @@
       </div>
 
       <div class="field">
+        <span>{t('form.tile')}</span>
+        <div class="sizes">
+          {#each [null, ...TILE_SIZES] as sz (sz ?? 'auto')}
+            <button type="button" class="size" aria-pressed={tile === sz} onclick={() => (tile = sz)}>
+              <span class="mini" aria-hidden="true">
+                {#each { length: 12 } as _, i (i)}<b class:x={MINI[sz ?? autoTile].includes(i)}></b>{/each}
+              </span>
+              {t(`form.tile.${sz ?? 'auto'}`)}
+            </button>
+          {/each}
+        </div>
+        <span class="small muted">{tile ? t('form.tile.help') : t('form.tile.autoHelp', { size: t(`form.tile.${autoTile}`).toLowerCase() })}</span>
+      </div>
+
+      <div class="field">
         <span>{t('form.fields')}</span>
         <span class="small muted" style="font-weight:400">{t('form.fieldsHelp')}</span>
         {#each fields as f, i (i)}
@@ -209,6 +233,16 @@
 
 <style>
   .actions { display: grid; gap: 12px; }
+  .sizes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .size {
+    display: grid; justify-items: center; gap: 6px; padding: 10px 2px 8px; cursor: pointer;
+    border: 2px solid var(--border); border-radius: 14px; background: var(--surface); color: inherit; font: inherit; font-size: 0.8rem; font-weight: 600;
+  }
+  .size[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+  .mini { display: grid; grid-template-columns: repeat(6, 6px); grid-template-rows: repeat(2, 8px); gap: 2px; }
+  .mini b { border-radius: 2px; background: var(--border); }
+  .mini b.x { background: var(--muted); }
+  .size[aria-pressed='true'] .mini b.x { background: var(--accent); }
   .action p { margin: 4px 0 0; }
   .field-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: start; }
   .templates { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 16px; padding: 12px 14px; margin-bottom: 20px; }

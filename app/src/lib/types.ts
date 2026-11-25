@@ -4,6 +4,8 @@ export type GoalKind = 'max' | 'min';
 export type Period = 'day' | 'week' | 'month';
 /** Périodes d'affichage : celles des objectifs, plus l'année. */
 export type ChartPeriod = Period | 'year';
+/** Taille d'une tuile sur l'accueil. */
+export type TileSize = 'small' | 'normal' | 'wide' | 'tall';
 
 export interface SyncMeta {
   created_at: string;
@@ -26,6 +28,8 @@ export interface Tracker extends SyncMeta {
   archived_at: string | null;
   /** Trophées : null = selon le type de compteur, 0 = non, 1 = oui. */
   achievements?: number | null;
+  /** Taille de la tuile : null = automatique (selon le type). */
+  tile?: TileSize | null;
 }
 
 export interface TrackerField extends SyncMeta {
@@ -70,7 +74,7 @@ export interface MergeSummary {
 
 export type TrackerInput = Pick<
   Tracker,
-  'name' | 'icon' | 'color' | 'polarity' | 'display_mode' | 'goal_kind' | 'goal_count' | 'goal_period' | 'achievements'
+  'name' | 'icon' | 'color' | 'polarity' | 'display_mode' | 'goal_kind' | 'goal_count' | 'goal_period' | 'achievements' | 'tile'
 > & { id?: string };
 
 export type FieldInput = { id?: string; name: string; unit: string | null };

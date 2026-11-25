@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS tracker (
   sort_order   REAL NOT NULL DEFAULT 0,
   archived_at  TEXT,
   achievements INTEGER,
+  -- Taille de la tuile : NULL = automatique, sinon small, normal, wide ou tall.
+  tile         TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,
