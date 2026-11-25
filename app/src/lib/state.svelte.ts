@@ -66,7 +66,7 @@ export function onAchievement(fn: (tracker: Tracker, a: Achievement) => void) {
 }
 
 /** Repère les succès nouvellement débloqués (appelé après chaque changement et chaque minute). */
-export function checkAchievements(now = Date.now()) {
+export function checkAchievements(now = Date.now(), notify = true) {
   const current = new Set<string>();
   const fresh: [Tracker, Achievement][] = [];
   for (const tr of app.trackers) {
@@ -74,14 +74,14 @@ export function checkAchievements(now = Date.now()) {
       if (!a.unlocked) continue;
       const key = `${tr.id}:${a.id}`;
       current.add(key);
-      if (unlocked && !unlocked.has(key)) fresh.push([tr, a]);
+      if (notify && unlocked && !unlocked.has(key)) fresh.push([tr, a]);
     }
   }
   unlocked = current;
   for (const [tr, a] of fresh) onUnlock?.(tr, a);
 }
 
-export async function refresh() {
+export async function refresh(notify = true) {
   const [trackers, all, fields, events] = await Promise.all([
     db.call('listTrackers', false),
     db.call('listTrackers', true),
@@ -92,7 +92,7 @@ export async function refresh() {
   app.archived = all.filter((t) => t.archived_at);
   app.fields = fields;
   app.events = events;
-  checkAchievements();
+  checkAchievements(Date.now(), notify);
 }
 
 export async function init() {
@@ -100,7 +100,7 @@ export async function init() {
     const info = await db.call('info');
     app.persistent = info.persistent;
     await refresh();
-    db.subscribe(() => void refresh());
+    db.subscribe((remote) => void refresh(!remote));
     setInterval(() => checkAchievements(), 60_000);
     if (navigator.storage?.persist) void navigator.storage.persist();
   } catch (e) {

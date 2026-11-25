@@ -166,7 +166,7 @@ export const en: Record<Key, string> = {
   'sync.syncing': 'Syncing…',
   'sync.error': 'Sync failed: {msg}',
   'sync.offline': 'Offline',
-  'sync.passkeys': 'Passkeys',
+  'sync.passkeys': 'Sign-in methods',
   'sync.addPasskey': 'Add a passkey on this device',
   'sync.tokens': 'API tokens and webhooks',
   'sync.tokens.help': 'To push events from a shortcut, Home Assistant or a script.',

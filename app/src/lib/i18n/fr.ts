@@ -164,7 +164,7 @@ export const fr = {
   'sync.syncing': 'Synchronisation…',
   'sync.error': 'Échec de la synchro : {msg}',
   'sync.offline': 'Hors ligne',
-  'sync.passkeys': 'Passkeys',
+  'sync.passkeys': 'Moyens de connexion',
   'sync.addPasskey': 'Ajouter une passkey sur cet appareil',
   'sync.tokens': 'Jetons d\'API et webhooks',
   'sync.tokens.help': 'Pour pousser des événements depuis un raccourci, Home Assistant ou un script.',

@@ -6,6 +6,13 @@ import type { ChangeSet, EventInput, FieldInput, TrackerInput } from '../types';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Sqlite3 = any;
 
+export interface SyncState {
+  cursor: number;
+  pushedHlc: string;
+  lastSyncAt: string | null;
+  userId: string | null;
+}
+
 /** API exposée par le worker de base de données (appelée par RPC depuis l'UI). */
 export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean) {
   const store = new Store(sql);
@@ -66,9 +73,9 @@ export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean) {
     merge: (changes: ChangeSet) => store.merge(changes),
     getSyncState: () => {
       const raw = store.getMeta('sync_state');
-      return raw ? (JSON.parse(raw) as { cursor: number; pushedHlc: string; lastSyncAt: string | null }) : { cursor: 0, pushedHlc: '', lastSyncAt: null };
+      return raw ? (JSON.parse(raw) as SyncState) : ({ cursor: 0, pushedHlc: '', lastSyncAt: null, userId: null } as SyncState);
     },
-    setSyncState: (s: { cursor: number; pushedHlc: string; lastSyncAt: string | null }) => store.setMeta('sync_state', JSON.stringify(s)),
+    setSyncState: (s: SyncState) => store.setMeta('sync_state', JSON.stringify(s)),
   };
 }
 
