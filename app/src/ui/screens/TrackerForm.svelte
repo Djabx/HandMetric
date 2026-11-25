@@ -8,6 +8,7 @@
   import UnitInput from '../components/UnitInput.svelte';
   import { toast } from '../../lib/state.svelte';
   import type { DisplayMode, GoalKind, Period, Polarity } from '../../lib/types';
+  import { achievementsEnabled } from '../../lib/domain/achievements';
 
   let { id = null, template = null }: { id?: string | null; template?: string | null } = $props();
 
@@ -30,6 +31,9 @@
       ? app.fields.filter((f) => f.tracker_id === existing.id).map((f) => ({ id: f.id as string | undefined, name: f.name, unit: f.unit ?? '' }))
       : (tpl?.fields ?? []).map((f) => ({ id: undefined as string | undefined, name: t(f.name), unit: f.unit })),
   );
+  /** Trophées : null = selon le type (désactivés pour un compteur neutre). */
+  let trophies = $state<number | null>(existing?.achievements ?? tpl?.achievements ?? null);
+  const trophiesOn = $derived(achievementsEnabled({ achievements: trophies, polarity }));
   let busy = $state(false);
 
 
@@ -53,6 +57,7 @@
           display_mode: mode,
           goal_kind: goalKind || null,
           goal_count: goalKind ? goalCount : null,
+          achievements: trophies,
           goal_period: goalKind ? goalPeriod : null,
         },
         $state.snapshot(fields).map((f) => ({ id: f.id, name: f.name, unit: f.unit || null })),
@@ -157,6 +162,15 @@
             </select>
           </div>
         {/if}
+      </div>
+
+      <div class="field">
+        <span>{t('form.trophies')}</span>
+        <div class="segmented">
+          <button type="button" aria-pressed={trophiesOn} onclick={() => (trophies = polarity === 'neutral' ? 1 : null)}>{t('form.trophies.on')}</button>
+          <button type="button" aria-pressed={!trophiesOn} onclick={() => (trophies = polarity === 'neutral' ? null : 0)}>{t('form.trophies.off')}</button>
+        </div>
+        <span class="small muted">{t(polarity === 'bad' ? 'form.trophies.helpBad' : polarity === 'good' ? 'form.trophies.helpGood' : 'form.trophies.helpNeutral')}</span>
       </div>
 
       <div class="field">

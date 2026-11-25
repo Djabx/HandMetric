@@ -24,6 +24,8 @@ export interface Tracker extends SyncMeta {
   goal_period: Period | null;
   sort_order: number;
   archived_at: string | null;
+  /** Trophées : null = selon le type de compteur, 0 = non, 1 = oui. */
+  achievements?: number | null;
 }
 
 export interface TrackerField extends SyncMeta {
@@ -66,7 +68,7 @@ export interface MergeSummary {
 
 export type TrackerInput = Pick<
   Tracker,
-  'name' | 'icon' | 'color' | 'polarity' | 'display_mode' | 'goal_kind' | 'goal_count' | 'goal_period'
+  'name' | 'icon' | 'color' | 'polarity' | 'display_mode' | 'goal_kind' | 'goal_count' | 'goal_period' | 'achievements'
 > & { id?: string };
 
 export type FieldInput = { id?: string; name: string; unit: string | null };

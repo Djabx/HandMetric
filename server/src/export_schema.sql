@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS tracker (
   goal_period  TEXT CHECK (goal_period IN ('day','week','month')),
   sort_order   REAL NOT NULL DEFAULT 0,
   archived_at  TEXT,
+  achievements INTEGER,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,

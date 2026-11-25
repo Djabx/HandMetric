@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LifeEvent, Tracker } from '../types';
 import { computeStats, goalStatus, periodSeries } from './stats';
-import { achievements } from './achievements';
+import { achievements, yearMilestones } from './achievements';
 import { DAY, breakdown, periodKey, addMonths } from './time';
 
 const T0 = Date.parse('2026-01-01T12:00:00Z');
@@ -104,5 +104,31 @@ describe('mesures par période', () => {
     expect(inRange).toHaveLength(1);
     const [dia] = fieldSummaries([{ id: 'dia', tracker_id: 't', name: 'Dia', unit: null, sort_order: 0 }] as never, inRange);
     expect(dia.average).toBe(76);
+  });
+});
+
+describe('trophées', () => {
+  it('jamais pour une occurrence d\'un mauvais compteur', () => {
+    const t = tracker();
+    const s = computeStats(t, [ev(T0 + 3_600_000)], T0 + 7_200_000, 60);
+    const a = achievements(t, s, null);
+    expect(a.some((x) => x.kind === 'count' || x.kind === 'streak')).toBe(false);
+    expect(a.some((x) => x.unlocked)).toBe(false);
+  });
+
+  it('désactivés par défaut pour un compteur neutre, activables', () => {
+    const t = tracker({ polarity: 'neutral', display_mode: 'frequency' });
+    const s = computeStats(t, [ev(T0 + DAY)], T0 + 2 * DAY, 60);
+    expect(achievements(t, s, null)).toEqual([]);
+    expect(achievements({ ...t, achievements: 1 }, s, null).length).toBe(0);
+    const good = tracker({ polarity: 'good', display_mode: 'frequency' });
+    expect(achievements(good, s, null).length).toBeGreaterThan(0);
+    expect(achievements({ ...good, achievements: 0 }, s, null)).toEqual([]);
+  });
+
+  it('paliers espacés au-delà d\'un an', () => {
+    expect(yearMilestones(0)).toEqual([2]);
+    expect(yearMilestones(4)).toEqual([2, 3, 5]);
+    expect(yearMilestones(20)).toEqual([2, 3, 5, 10, 15, 20, 25]);
   });
 });

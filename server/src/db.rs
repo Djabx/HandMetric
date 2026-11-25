@@ -41,6 +41,7 @@ fn columns(table: &str) -> &'static [(&'static str, Ty)] {
             ("goal_period", OptText),
             ("sort_order", Real),
             ("archived_at", OptText),
+            ("achievements", OptInt),
             ("created_at", Text),
             ("updated_at", Text),
             ("deleted_at", OptText),
@@ -176,8 +177,14 @@ pub struct Db {
     pub backend: Backend,
 }
 
-const PG_MIGRATIONS: &[&str] = &[include_str!("../migrations/postgres/0001_init.sql")];
-const SQLITE_MIGRATIONS: &[&str] = &[include_str!("../migrations/sqlite/0001_init.sql")];
+const PG_MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/postgres/0001_init.sql"),
+    include_str!("../migrations/postgres/0002_achievements.sql"),
+];
+const SQLITE_MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/sqlite/0001_init.sql"),
+    include_str!("../migrations/sqlite/0002_achievements.sql"),
+];
 
 impl Db {
     pub async fn connect(url: &str) -> Result<Self> {

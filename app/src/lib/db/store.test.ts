@@ -165,4 +165,19 @@ describe('Store', () => {
     expect(s.listDeletedTrackers()).toHaveLength(0);
     expect(s.purgeExpiredTrash(30, in31days)).toBe(0);
   });
+
+  it('ajoute la colonne des trophées à une base existante et la synchronise', async () => {
+    const sql = await memorySql();
+    sql.exec(`CREATE TABLE tracker (id TEXT PRIMARY KEY, name TEXT NOT NULL, icon TEXT, color TEXT, polarity TEXT NOT NULL,
+      display_mode TEXT NOT NULL, goal_kind TEXT, goal_count INTEGER, goal_period TEXT, sort_order REAL NOT NULL DEFAULT 0,
+      archived_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT, device_id TEXT NOT NULL)`);
+    const a = new Store(sql);
+    const t = a.saveTracker({ name: 'Tension', icon: null, color: null, polarity: 'neutral', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null, achievements: 1 });
+    expect(a.getTracker(t.id)!.achievements).toBe(1);
+    const b = await newStore();
+    b.merge(a.snapshot());
+    expect(b.getTracker(t.id)!.achievements).toBe(1);
+    a.saveTracker({ id: t.id, name: 'Tension', icon: null, color: null, polarity: 'neutral', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null });
+    expect(a.getTracker(t.id)!.achievements).toBe(1);
+  });
 });

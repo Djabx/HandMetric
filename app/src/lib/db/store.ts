@@ -1,4 +1,4 @@
-import { COLUMNS, DATA_SCHEMA, LOCAL_SCHEMA, SCHEMA_VERSION, SYNC_TABLES, type SyncTable } from './schema';
+import { ADDED_COLUMNS, COLUMNS, DATA_SCHEMA, LOCAL_SCHEMA, SCHEMA_VERSION, SYNC_TABLES, type SyncTable } from './schema';
 import { Hlc } from './hlc';
 import { newDeviceId, uuidv7 } from './ids';
 import type { Sql } from './sql';
@@ -55,6 +55,10 @@ export class Store {
   constructor(private readonly sql: Sql) {
     sql.exec(DATA_SCHEMA);
     sql.exec(LOCAL_SCHEMA);
+    for (const { table, column, type } of ADDED_COLUMNS) {
+      const cols = sql.all<{ name: string }>(`PRAGMA table_info(${table})`).map((c) => c.name);
+      if (!cols.includes(column)) sql.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    }
     let deviceId = this.getMeta('device_id');
     if (!deviceId) {
       deviceId = newDeviceId();
@@ -121,6 +125,7 @@ export class Store {
       goal_period: goal ? input.goal_period : null,
       sort_order: existing?.sort_order ?? this.nextSortOrder(),
       archived_at: existing?.archived_at ?? null,
+      achievements: input.achievements === undefined ? (existing?.achievements ?? null) : input.achievements,
       created_at: existing?.created_at ?? nowIso(),
       updated_at: stamp,
       deleted_at: null,
@@ -495,6 +500,7 @@ function sanitize(table: SyncTable, raw: Row): Row | null {
   if (typeof row.updated_at !== 'string' || !row.updated_at) return null;
   if (typeof row.device_id !== 'string') return null;
   if (table === 'tracker' && row.sort_order === null) row.sort_order = 0;
+  if (table === 'tracker' && row.achievements !== null && row.achievements !== 0 && row.achievements !== 1) row.achievements = null;
   if (table === 'tracker_field' && row.sort_order === null) row.sort_order = 0;
   if (table === 'event' && row.measures !== null) {
     try {

@@ -131,7 +131,9 @@ async fn sync_push_pull_merge() {
         let older = json!({ "changes": { "tracker": [tracker("t1", "Vieux", "1795500000000-0000-dev2")] } });
         let (_, v, _) = c.req("POST", "/api/v1/changes", Some(older), None).await;
         assert_eq!(v["summary"]["ignored"], 1);
-        let newer = json!({ "changes": { "tracker": [tracker("t1", "Course à pied", "1795700000000-0000-dev2")] } });
+        let mut newer_t = tracker("t1", "Course à pied", "1795700000000-0000-dev2");
+        newer_t["achievements"] = json!(0);
+        let newer = json!({ "changes": { "tracker": [newer_t] } });
         let (_, v, _) = c.req("POST", "/api/v1/changes", Some(newer), None).await;
         assert_eq!(v["summary"]["updated"], 1);
 
@@ -164,6 +166,7 @@ async fn sync_push_pull_merge() {
         let (_, v, _) = c.req("GET", "/api/v1/changes?since=0", None, None).await;
         assert_eq!(v["changes"]["tracker"][0]["name"], "Course à pied");
         assert_eq!(v["changes"]["tracker"][0]["goal_count"], 3);
+        assert_eq!(v["changes"]["tracker"][0]["achievements"], 0, "{url}");
 
         // Isolation entre utilisateurs.
         let other = login(&state).await;
