@@ -1,12 +1,11 @@
 <script lang="ts">
-  import Intro from '../components/Intro.svelte';
+  import Welcome from '../components/Welcome.svelte';
   import { memoryWarning } from '../../lib/storage';
   import { sync } from '../../lib/sync/sync.svelte';
   import { app, clock, viewOf, type TrackerView } from '../../lib/state.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { go } from '../../lib/router.svelte';
   import { db } from '../../lib/db/client';
-  import { TEMPLATES } from '../../lib/templates';
   import TrackerCard from '../components/TrackerCard.svelte';
   import EventDialog from '../components/EventDialog.svelte';
   import SyncBadge from '../components/SyncBadge.svelte';
@@ -85,16 +84,7 @@
   {/if}
 
   {#if views.length === 0}
-    <section class="empty">
-      <h2>{t('dash.empty.title')}</h2>
-      <p class="muted">{t('dash.empty.body')}</p>
-      <div class="templates">
-        {#each TEMPLATES as tpl (tpl.id)}
-          <button class="btn" onclick={() => go(`new/${tpl.id}`)}>{tpl.icon} {t(tpl.name)}</button>
-        {/each}
-      </div>
-      <section class="card welcome"><Intro /></section>
-    </section>
+    <Welcome />
   {:else if reordering}
     <p class="small muted">{t('dash.reorder.help')}</p>
     <ol class="reorder card" onpointermove={drag} onpointerup={drop} onpointercancel={drop}>
@@ -122,7 +112,7 @@
 </div>
 
 {#if !reordering}
-<button class="fab btn primary" onclick={() => go('new')}>＋ {t('dash.new')}</button>
+{#if views.length}<button class="fab btn primary" onclick={() => go('new')}>＋ {t('dash.new')}</button>{/if}
 {/if}
 
 {#if logging}
@@ -130,7 +120,6 @@
 {/if}
 
 <style>
-  .welcome { margin: 24px 0 88px; text-align: left; }
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   .reorder { list-style: none; margin: 0; padding: 4px 12px; }
   .reorder li {
@@ -146,7 +135,6 @@
   .icon-btn.on { background: var(--accent); color: var(--accent-text); }
   .brand { display: flex; align-items: center; gap: 10px; }
   .brand img { border-radius: 8px; }
-  .templates { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
   .fab {
     position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
     border-radius: 999px; box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 40%, transparent); min-height: 56px; padding: 0 22px; font-family: var(--font-display); font-size: 1.05rem;

@@ -4,6 +4,7 @@
   import { back } from '../../lib/router.svelte';
   import { APP_VERSION } from '../../lib/db/store';
   import Intro from '../components/Intro.svelte';
+  import DataModes from '../components/DataModes.svelte';
 </script>
 
 <div class="page">
@@ -19,16 +20,7 @@
 
   <section class="section">
     <h2>{t('about.data')}</h2>
-    <div class="card modes">
-      <div>
-        <h3>🧭 {t('about.solo.title')}</h3>
-        <p>{t('about.solo.body')}</p>
-      </div>
-      <div>
-        <h3>🏠 {t('about.server.title')}</h3>
-        <p>{t('about.server.body')}</p>
-      </div>
-    </div>
+    <DataModes short={false} />
     <p class="small muted">{t('about.privacy')}</p>
   </section>
 
@@ -44,7 +36,4 @@
 
 <style>
   .lead { font-size: 1.15rem; font-weight: 600; }
-  h3 { font-size: 1rem; margin: 0 0 4px; }
-  .modes { display: grid; gap: 14px; }
-  .modes p { margin: 0; }
 </style>
