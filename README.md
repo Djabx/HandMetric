@@ -1,7 +1,5 @@
 # LifeLog
 
-*(dépôt : `HandMetric`, nom de travail d'origine)*
-
 > Les succès de ta vie, comme dans un jeu vidéo.
 
 LifeLog est une application web progressive (PWA) qui permet de suivre des événements du quotidien, bons ou mauvais, et de les transformer en compteurs et en succès façon jeu vidéo :
@@ -63,7 +61,7 @@ Le workflow `.github/workflows/pages.yml` publie la PWA à chaque push sur `main
 
 ```nix
 # flake.nix de la machine
-inputs.lifelog.url = "github:Djabx/HandMetric";
+inputs.lifelog.url = "github:Djabx/lifelog";
 
 # configuration NixOS
 imports = [ inputs.lifelog.nixosModules.default ];
