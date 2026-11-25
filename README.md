@@ -122,6 +122,8 @@ nix build .#app-solo            # PWA pour GitHub Pages
 nix flake check                 # tout construire et tester
 ```
 
+Les messages de commit suivent [Conventional Commits](https://www.conventionalcommits.org/fr/) (`feat(app): …`, `fix(server): …`, `build(nix): …`). Les dépendances npm, Cargo, Nix et GitHub Actions sont tenues à jour par [Renovate](renovate.json), qui n'installe que des versions publiées depuis au moins un jour.
+
 ## Organisation du dépôt
 
 ```
