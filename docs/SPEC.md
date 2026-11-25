@@ -67,6 +67,7 @@ LifeLog est une **application pour soi**, pas une vitrine : rien n'est partagé 
   - objectif tenu : quel que soit le type.
 - Une occurrence d'un compteur « mauvais » ne donne jamais de trophée : on récompense le temps tenu sans.
 - Trophées activables par compteur (colonne `tracker.achievements` : NULL = selon le type, 0 = non, 1 = oui). Par défaut : activés, sauf pour un compteur « neutre » (mesures comme la tension).
+- Taille de la tuile sur l'accueil, au choix par compteur (colonne `tracker.tile` : NULL = automatique, sinon `small`, `normal`, `wide`, `tall`). En automatique : large pour l'abstinence et les compteurs avec mesures (dernière valeur et courbe), haute pour un objectif de 15 ou moins (bâtons), normale sinon. Grille de 6 colonnes sur téléphone (12 sur grand écran) : petite = 2, normale ou haute = 3, large = toute la ligne (6 sur grand écran).
 - Les succès sont **calculés** à partir des événements, jamais stockés comme vérité (voir 4.3).
 - Une notification dans l'application quand un succès est débloqué pendant que l'app est ouverte.
 

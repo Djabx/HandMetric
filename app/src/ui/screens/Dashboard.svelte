@@ -120,7 +120,9 @@
 {/if}
 
 <style>
-  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  /* 6 colonnes : petite tuile = 2, normale ou haute = 3, large = toute la ligne. 12 sur grand écran. */
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-flow: row dense; }
+  @media (min-width: 760px) { .grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
   .reorder { list-style: none; margin: 0; padding: 4px 12px; }
   .reorder li {
     display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border);

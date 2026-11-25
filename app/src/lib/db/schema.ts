@@ -8,7 +8,7 @@ export type SyncTable = (typeof SYNC_TABLES)[number];
 export const COLUMNS: Record<SyncTable, readonly string[]> = {
   tracker: [
     'id', 'name', 'icon', 'color', 'polarity', 'display_mode',
-    'goal_kind', 'goal_count', 'goal_period', 'sort_order', 'archived_at', 'achievements',
+    'goal_kind', 'goal_count', 'goal_period', 'sort_order', 'archived_at', 'achievements', 'tile',
     'created_at', 'updated_at', 'deleted_at', 'device_id',
   ],
   tracker_field: [
@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS tracker (
   archived_at  TEXT,
   -- Trophées : NULL = selon le type de compteur, 0 = non, 1 = oui.
   achievements INTEGER,
+  -- Taille de la tuile : NULL = automatique, sinon small, normal, wide ou tall.
+  tile         TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,
@@ -80,6 +82,7 @@ CREATE INDEX IF NOT EXISTS event_by_updated ON event(updated_at);
 /** Colonnes ajoutées après la création du schéma : ajoutées aux bases existantes. */
 export const ADDED_COLUMNS: { table: SyncTable; column: string; type: string }[] = [
   { table: 'tracker', column: 'achievements', type: 'INTEGER' },
+  { table: 'tracker', column: 'tile', type: 'TEXT' },
 ];
 
 /**

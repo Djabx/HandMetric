@@ -227,5 +227,23 @@ describe('Store', () => {
     expect(b.getTracker(t.id)!.achievements).toBe(1);
     a.saveTracker({ id: t.id, name: 'Tension', icon: null, color: null, polarity: 'neutral', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null });
     expect(a.getTracker(t.id)!.achievements).toBe(1);
+    // La taille de la tuile arrive de la même façon sur une ancienne base.
+    expect(a.getTracker(t.id)!.tile).toBeNull();
+  });
+
+  it('enregistre et synchronise la taille de la tuile, et ignore une valeur inconnue', async () => {
+    const a = await newStore();
+    const input = { name: 'Poids', icon: null, color: null, polarity: 'neutral' as const, display_mode: 'frequency' as const, goal_kind: null, goal_count: null, goal_period: null };
+    const t = a.saveTracker({ ...input, tile: 'small' });
+    const b = await newStore();
+    b.merge(a.snapshot());
+    expect(b.getTracker(t.id)!.tile).toBe('small');
+    a.saveTracker({ ...input, id: t.id });
+    expect(a.getTracker(t.id)!.tile).toBe('small');
+    const snap = a.snapshot();
+    snap.tracker[0].tile = 'géante';
+    snap.tracker[0].updated_at = 'z' + snap.tracker[0].updated_at;
+    b.merge(snap);
+    expect(b.getTracker(t.id)!.tile).toBeNull();
   });
 });
