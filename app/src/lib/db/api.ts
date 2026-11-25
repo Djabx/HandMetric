@@ -33,6 +33,9 @@ export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean) {
     listAllEvents: () => store.listAllEvents(),
     saveEvent: (input: EventInput) => store.saveEvent(input),
     deleteEvent: (id: string) => store.deleteEvent(id),
+    listDeletedEvents: () => store.listDeletedEvents(),
+    restoreEvent: (id: string) => store.restoreEvent(id),
+    purgeEvent: (id: string) => store.purgeEvent(id),
     getMeta: (key: string) => store.getMeta(key),
     setMeta: (key: string, value: string) => store.setMeta(key, value),
 

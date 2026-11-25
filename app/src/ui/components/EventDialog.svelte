@@ -60,13 +60,15 @@
   }
 
   async function remove() {
-    if (!event || !confirm(t('common.confirmDelete'))) return;
-    await db.write('deleteEvent', event.id);
+    if (!event) return;
+    const id = event.id;
+    await db.write('deleteEvent', id);
+    toast(t('event.deleted'), { icon: '🗑️', action: { label: t('common.undo'), run: () => void db.write('restoreEvent', id) } }, 8000);
     close();
   }
 
   function close() {
-    dialog.close();
+    dialog?.close();
   }
 </script>
 

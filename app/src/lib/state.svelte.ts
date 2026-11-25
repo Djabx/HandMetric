@@ -2,7 +2,7 @@ import { db } from './db/client';
 import type { LifeEvent, Tracker, TrackerField } from './types';
 import { computeStats, goalStatus, type GoalStatus, type TrackerStats } from './domain/stats';
 import { achievements, type Achievement } from './domain/achievements';
-import { localOffset } from './db/store';
+import { localOffset, type DeletedEvent } from './db/store';
 
 export const app = $state({
   ready: false,
@@ -12,6 +12,8 @@ export const app = $state({
   archived: [] as Tracker[],
   /** Corbeille : compteurs supprimés, restaurables. */
   deleted: [] as (Tracker & { event_count: number })[],
+  /** Corbeille : événements supprimés un par un, restaurables. */
+  deletedEvents: [] as DeletedEvent[],
   fields: [] as TrackerField[],
   events: [] as LifeEvent[],
 });
@@ -98,14 +100,16 @@ export function checkAchievements(now = Date.now(), notify = true) {
 }
 
 export async function refresh(notify = true) {
-  const [trackers, all, fields, events, deleted] = await Promise.all([
+  const [trackers, all, fields, events, deleted, deletedEvents] = await Promise.all([
     db.call('listTrackers', false),
     db.call('listTrackers', true),
     db.call('listFields'),
     db.call('listAllEvents'),
     db.call('listDeletedTrackers'),
+    db.call('listDeletedEvents'),
   ]);
   app.deleted = deleted;
+  app.deletedEvents = deletedEvents;
   clock.now = Date.now(); // l'horloge ne tique que toutes les 15 s : un compteur tout juste créé doit déjà être « dans le passé »
   app.trackers = trackers;
   app.archived = all.filter((t) => t.archived_at);

@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 import { sync, type Health } from './sync.svelte';
 import * as webauthn from './webauthn';
-import type { ChangeSet } from '../types';
+import type { ChangeSet, Row } from '../types';
 
 declare const __LIFELOG_MODE__: 'solo' | 'auto';
 
@@ -87,11 +87,12 @@ let again = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 function splitChunks(c: ChangeSet): ChangeSet[] {
-  const rows: [keyof ChangeSet, ChangeSet[keyof ChangeSet][number]][] = [];
-  for (const t of ['tracker', 'tracker_field', 'event'] as const) for (const r of c[t]) rows.push([t, r]);
+  type Key = 'purge' | 'tracker' | 'tracker_field' | 'event';
+  const rows: [Key, Row][] = [];
+  for (const t of ['purge', 'tracker', 'tracker_field', 'event'] as const) for (const r of c[t] ?? []) rows.push([t, r]);
   const out: ChangeSet[] = [];
   for (let i = 0; i < rows.length; i += PUSH_CHUNK) {
-    const chunk: ChangeSet = { tracker: [], tracker_field: [], event: [] };
+    const chunk: Required<ChangeSet> = { purge: [], tracker: [], tracker_field: [], event: [] };
     for (const [t, r] of rows.slice(i, i + PUSH_CHUNK)) chunk[t].push(r);
     out.push(chunk);
   }

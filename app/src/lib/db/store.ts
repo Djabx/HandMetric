@@ -1,4 +1,7 @@
-import { ADDED_COLUMNS, COLUMNS, DATA_SCHEMA, LOCAL_SCHEMA, SCHEMA_VERSION, SYNC_TABLES, type SyncTable } from './schema';
+import {
+  ADDED_COLUMNS, COLUMNS, DATA_SCHEMA, LOCAL_SCHEMA, PURGE_COLUMNS, PURGE_SCHEMA, PURGE_TABLES, SCHEMA_VERSION, SYNC_TABLES,
+  type SyncTable,
+} from './schema';
 import { Hlc } from './hlc';
 import { newDeviceId, uuidv7 } from './ids';
 import type { Sql } from './sql';
@@ -29,10 +32,13 @@ export interface JsonExport {
 const nowIso = () => new Date().toISOString();
 
 /**
- * Nom d'un compteur supprimé définitivement. La ligne reste comme « pierre tombale »
- * vidée de son contenu, pour que la suppression se propage par la synchronisation.
+ * Ancienne marque des compteurs supprimés définitivement (lignes vidées mais conservées).
+ * Ces lignes sont désormais effacées pour de bon au démarrage.
  */
-export const PURGED_NAME = '∅';
+const LEGACY_PURGED_NAME = '∅';
+
+/** Événement supprimé (corbeille), avec le compteur auquel il appartient. */
+export type DeletedEvent = LifeEvent & { tracker_name: string; tracker_icon: string | null };
 
 /** Durée de séjour dans la corbeille avant suppression définitive automatique. */
 export const TRASH_DAYS = 30;
@@ -55,6 +61,7 @@ export class Store {
   constructor(private readonly sql: Sql) {
     sql.exec(DATA_SCHEMA);
     sql.exec(LOCAL_SCHEMA);
+    sql.exec(PURGE_SCHEMA);
     for (const { table, column, type } of ADDED_COLUMNS) {
       const cols = sql.all<{ name: string }>(`PRAGMA table_info(${table})`).map((c) => c.name);
       if (!cols.includes(column)) sql.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
@@ -69,7 +76,7 @@ export class Store {
     this.setMeta('app_version', APP_VERSION);
     this.deviceId = deviceId;
     this.hlc = new Hlc(deviceId);
-    for (const t of SYNC_TABLES) {
+    for (const t of [...SYNC_TABLES, 'purge']) {
       const [row] = sql.all<{ m: string | null }>(`SELECT max(updated_at) AS m FROM ${t}`);
       if (row?.m) this.hlc.receive(row.m);
     }
@@ -251,45 +258,77 @@ export class Store {
     return this.sql.all<Tracker & { event_count: number }>(
       `SELECT t.*, (SELECT COUNT(*) FROM event e WHERE e.tracker_id = t.id AND e.deleted_at = t.deleted_at) AS event_count
        FROM tracker t WHERE t.deleted_at IS NOT NULL AND t.name <> ? ORDER BY t.deleted_at DESC`,
-      [PURGED_NAME],
+      [LEGACY_PURGED_NAME],
     );
+  }
+
+  /** Corbeille : événements supprimés un par un (leur compteur existe toujours). */
+  listDeletedEvents(): DeletedEvent[] {
+    return this.sql
+      .all<Row>(
+        `SELECT e.*, t.name AS tracker_name, t.icon AS tracker_icon FROM event e JOIN tracker t ON t.id = e.tracker_id
+         WHERE e.deleted_at IS NOT NULL AND t.deleted_at IS NULL ORDER BY e.deleted_at DESC, e.updated_at DESC`,
+      )
+      .map((r) => toEvent(r) as DeletedEvent);
   }
 
   /**
-   * Supprime définitivement un compteur de la corbeille : son nom, ses champs et le
-   * contenu de ses événements (mesures, notes, dates) sont effacés. Il ne reste que des
-   * identifiants vides, nécessaires pour propager la suppression aux autres appareils.
+   * Efface physiquement une ligne (et, pour un compteur, ses champs et événements).
+   * Seul son identifiant est noté dans `purge`, pour propager l'effacement.
    */
-  purgeTracker(id: string): void {
-    const [t] = this.sql.all<Row>('SELECT * FROM tracker WHERE id = ? AND deleted_at IS NOT NULL', [id]);
-    if (!t || t.name === PURGED_NAME) return;
-    const at = String(t.deleted_at);
-    const stamp = () => ({ updated_at: this.hlc.now(), device_id: this.deviceId });
+  private erase(tbl: (typeof PURGE_TABLES)[number], id: string): void {
     this.tx(() => {
-      this.upsert('tracker', {
-        ...t, name: PURGED_NAME, icon: null, color: null, goal_kind: null, goal_count: null, goal_period: null,
-        archived_at: null, created_at: at, ...stamp(),
-      });
-      for (const f of this.sql.all<Row>('SELECT * FROM tracker_field WHERE tracker_id = ?', [id])) {
-        this.upsert('tracker_field', { ...f, name: PURGED_NAME, unit: null, created_at: at, deleted_at: f.deleted_at ?? at, ...stamp() });
-      }
-      for (const e of this.sql.all<Row>('SELECT * FROM event WHERE tracker_id = ?', [id])) {
-        this.upsert('event', {
-          ...e, occurred_at: at, tz_offset: 0, measures: null, note: null, created_at: at, deleted_at: e.deleted_at ?? at, ...stamp(),
-        });
-      }
+      this.sql.run(
+        'INSERT INTO purge (id, tbl, updated_at, device_id) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING',
+        [id, tbl, this.hlc.now(), this.deviceId],
+      );
+      this.applyPurge(tbl, id);
     });
   }
 
-  /** Supprime définitivement les compteurs restés plus de `days` jours dans la corbeille. */
+  private applyPurge(tbl: string, id: string): void {
+    if (tbl === 'tracker') {
+      this.sql.run('DELETE FROM event WHERE tracker_id = ?', [id]);
+      this.sql.run('DELETE FROM tracker_field WHERE tracker_id = ?', [id]);
+      this.sql.run('DELETE FROM tracker WHERE id = ?', [id]);
+    } else if (tbl === 'tracker_field' || tbl === 'event') {
+      this.sql.run(`DELETE FROM ${tbl} WHERE id = ?`, [id]);
+    }
+  }
+
+  /** Supprime définitivement un compteur de la corbeille, avec ses champs et événements. */
+  purgeTracker(id: string): void {
+    const [t] = this.sql.all<Row>('SELECT id FROM tracker WHERE id = ? AND deleted_at IS NOT NULL', [id]);
+    if (t) this.erase('tracker', id);
+  }
+
+  /** Supprime définitivement un événement de la corbeille. */
+  purgeEvent(id: string): void {
+    const [e] = this.sql.all<Row>('SELECT id FROM event WHERE id = ? AND deleted_at IS NOT NULL', [id]);
+    if (e) this.erase('event', id);
+  }
+
+  /**
+   * Supprime définitivement ce qui est resté plus de `days` jours dans la corbeille :
+   * compteurs, événements et champs de mesure retirés d'un compteur.
+   */
   purgeExpiredTrash(days = TRASH_DAYS, now = Date.now()): number {
     const limit = new Date(now - days * 86_400_000).toISOString();
-    const ids = this.sql.all<{ id: string }>(
-      'SELECT id FROM tracker WHERE deleted_at IS NOT NULL AND deleted_at < ? AND name <> ?',
-      [limit, PURGED_NAME],
-    );
-    for (const { id } of ids) this.purgeTracker(id);
-    return ids.length;
+    let n = 0;
+    this.tx(() => {
+      const trackers = this.sql.all<{ id: string }>(
+        'SELECT id FROM tracker WHERE (deleted_at IS NOT NULL AND deleted_at < ?) OR name = ?',
+        [limit, LEGACY_PURGED_NAME],
+      );
+      for (const { id } of trackers) this.erase('tracker', id);
+      for (const tbl of ['event', 'tracker_field'] as const) {
+        const rows = this.sql.all<{ id: string }>(`SELECT id FROM ${tbl} WHERE deleted_at IS NOT NULL AND deleted_at < ?`, [limit]);
+        for (const { id } of rows) this.erase(tbl, id);
+        n += rows.length;
+      }
+      n += trackers.length;
+    });
+    return n;
   }
 
   /**
@@ -299,7 +338,7 @@ export class Store {
    */
   restoreTracker(id: string): void {
     const [t] = this.sql.all<Row>('SELECT * FROM tracker WHERE id = ? AND deleted_at IS NOT NULL', [id]);
-    if (!t || t.name === PURGED_NAME) return;
+    if (!t) return;
     const at = t.deleted_at;
     this.tx(() => {
       this.upsert('tracker', { ...t, deleted_at: null, updated_at: this.hlc.now(), device_id: this.deviceId });
@@ -317,10 +356,27 @@ export class Store {
     this.upsert('event', { ...r, deleted_at: nowIso(), updated_at: this.hlc.now(), device_id: this.deviceId });
   }
 
+  /** Restaure un événement supprimé (si son compteur n'est pas lui-même à la corbeille). */
+  restoreEvent(id: string): void {
+    const [r] = this.sql.all<Row>(
+      `SELECT e.* FROM event e JOIN tracker t ON t.id = e.tracker_id
+       WHERE e.id = ? AND e.deleted_at IS NOT NULL AND t.deleted_at IS NULL`,
+      [id],
+    );
+    if (!r) return;
+    this.upsert('event', { ...r, deleted_at: null, updated_at: this.hlc.now(), device_id: this.deviceId });
+  }
+
   // ---------- fusion (import, sync) ----------
 
   /** Lignes modifiées après une estampille HLC (exclue), pour la sync. */
   changesSince(hlc: string): ChangeSet {
+    const out = this.dataSince(hlc);
+    out.purge = this.sql.all<Row>('SELECT * FROM purge WHERE updated_at > ? ORDER BY updated_at', [hlc]);
+    return out;
+  }
+
+  private dataSince(hlc: string): ChangeSet {
     const out = {} as ChangeSet;
     for (const t of SYNC_TABLES) {
       out[t] = this.sql.all<Row>(`SELECT * FROM ${t} WHERE updated_at > ? ORDER BY updated_at`, [hlc]);
@@ -331,7 +387,7 @@ export class Store {
   /** Plus grande estampille HLC connue localement. */
   maxHlc(): string {
     let max = '';
-    for (const t of SYNC_TABLES) {
+    for (const t of [...SYNC_TABLES, 'purge']) {
       const [r] = this.sql.all<{ m: string | null }>(`SELECT max(updated_at) AS m FROM ${t}`);
       if (r?.m && r.m > max) max = r.m;
     }
@@ -346,11 +402,29 @@ export class Store {
   merge(changes: Partial<ChangeSet>): MergeSummary {
     const summary: MergeSummary = { inserted: 0, updated: 0, ignored: 0, stillDeleted: 0, byTable: {} };
     this.tx(() => {
+      // Les effacements d'abord : une ligne effacée ne revient jamais, même plus récente.
+      const p = { inserted: 0, updated: 0, ignored: 0 };
+      for (const raw of changes.purge ?? []) {
+        const row = sanitizePurge(raw);
+        const [known] = row ? this.sql.all<Row>('SELECT id FROM purge WHERE id = ?', [row.id]) : [];
+        if (!row || known) {
+          p.ignored++;
+          continue;
+        }
+        this.sql.run(
+          `INSERT INTO purge (${PURGE_COLUMNS.join(', ')}) VALUES (${PURGE_COLUMNS.map(() => '?').join(', ')})`,
+          PURGE_COLUMNS.map((c) => row[c]),
+        );
+        this.applyPurge(String(row.tbl), String(row.id));
+        this.hlc.receive(String(row.updated_at));
+        p.inserted++;
+      }
+      summary.byTable.purge = p;
       for (const t of SYNC_TABLES) {
         const s = { inserted: 0, updated: 0, ignored: 0 };
         for (const raw of changes[t] ?? []) {
           const row = sanitize(t, raw);
-          if (!row) {
+          if (!row || this.isPurged(row)) {
             s.ignored++;
             continue;
           }
@@ -360,7 +434,7 @@ export class Store {
           );
           if (cur && cur.updated_at >= String(row.updated_at)) {
             s.ignored++;
-            if (t === 'tracker' && cur.deleted_at && !row.deleted_at && cur.name !== PURGED_NAME) summary.stillDeleted++;
+            if (t === 'tracker' && cur.deleted_at && !row.deleted_at) summary.stillDeleted++;
             continue;
           }
           try {
@@ -380,6 +454,12 @@ export class Store {
       }
     });
     return summary;
+  }
+
+  /** La ligne, ou son compteur, a-t-elle été effacée définitivement ? */
+  private isPurged(row: Row): boolean {
+    const ids = [row.id, row.tracker_id].filter((v): v is string => typeof v === 'string');
+    return this.sql.all(`SELECT 1 FROM purge WHERE id IN (${ids.map(() => '?').join(', ')})`, ids).length > 0;
   }
 
   private upsert(table: SyncTable, row: Row): void {
@@ -415,7 +495,7 @@ export class Store {
 
   /** Toutes les lignes synchronisables (y compris supprimées, pour propager les suppressions). */
   snapshot(): ChangeSet {
-    return this.changesSince('');
+    return this.dataSince('');
   }
 
   exportJson(): JsonExport {
@@ -483,6 +563,14 @@ export function readJsonExport(data: unknown): ChangeSet {
     tracker_field: d.tracker_fields ?? [],
     event: (d.events ?? []).map((e) => ({ ...e, measures: e.measures ? JSON.stringify(e.measures) : null })) as Row[],
   };
+}
+
+function sanitizePurge(raw: Row): Row | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const { id, tbl, updated_at, device_id } = raw;
+  if (typeof id !== 'string' || !id || typeof updated_at !== 'string' || !updated_at || typeof device_id !== 'string') return null;
+  if (!PURGE_TABLES.includes(tbl as (typeof PURGE_TABLES)[number])) return null;
+  return { id, tbl, updated_at, device_id };
 }
 
 /** Ne garde que les colonnes connues, vérifie le minimum vital. */

@@ -60,6 +60,7 @@ pub fn from_json(v: &Value) -> Result<ChangeSet> {
         tracker: rows("trackers"),
         tracker_field: rows("tracker_fields"),
         event: rows("events"),
+        purge: Vec::new(),
     })
 }
 

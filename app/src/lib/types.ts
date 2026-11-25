@@ -55,6 +55,8 @@ export interface ChangeSet {
   tracker: Row[];
   tracker_field: Row[];
   event: Row[];
+  /** Effacements définitifs (identifiants seulement). Absent des exports. */
+  purge?: Row[];
 }
 
 export interface MergeSummary {
