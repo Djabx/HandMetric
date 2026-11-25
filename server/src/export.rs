@@ -114,7 +114,7 @@ pub async fn to_sqlite(data: &ChangeSet, device_id: &str) -> Result<Vec<u8>> {
                         .collect::<Vec<_>>()
                         .join(", ")
                 );
-                let mut q = sqlx::query(&sql);
+                let mut q = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()));
                 for c in &cols {
                     q = match &row[*c] {
                         Value::Null => q.bind(None::<String>),
@@ -170,10 +170,10 @@ pub async fn from_sqlite(bytes: &[u8]) -> Result<ChangeSet> {
                 continue;
             }
             // Lecture en JSON côté SQLite : types préservés sans dépendre du pilote.
-            let rows = sqlx::query(&format!(
+            let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
                 "SELECT json_object({}) AS j FROM {table}",
                 json_cols(table)
-            ))
+            )))
             .fetch_all(&pool)
             .await?;
             for r in rows {
