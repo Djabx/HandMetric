@@ -13,7 +13,7 @@
 
 <div class="page">
   <header class="topbar">
-    <h1>{t('app.name')}</h1>
+    <h1 class="brand"><img src="./favicon.svg" alt="" width="28" height="28" />{t('app.name')}</h1>
     <SyncBadge />
     <button class="icon-btn" onclick={() => go('settings')} aria-label={t('dash.settings')} title={t('dash.settings')}>⚙️</button>
   </header>
@@ -48,10 +48,12 @@
 {/if}
 
 <style>
-  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand img { border-radius: 8px; }
   .templates { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
   .fab {
     position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
-    border-radius: 999px; box-shadow: 0 4px 16px rgb(0 0 0 / 0.2); min-height: 52px; padding: 0 20px;
+    border-radius: 999px; box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 40%, transparent); min-height: 56px; padding: 0 22px; font-family: var(--font-display); font-size: 1.05rem;
   }
 </style>
