@@ -14,11 +14,16 @@ export interface SyncState {
 }
 
 /** API exposée par le worker de base de données (appelée par RPC depuis l'UI). */
-export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean) {
+export interface StorageProblem {
+  issue: 'locked' | 'unsupported' | 'error';
+  detail: string;
+}
+
+export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean, problem: StorageProblem | null = null) {
   const store = new Store(sql);
   store.purgeExpiredTrash();
   return {
-    info: () => ({ deviceId: store.deviceId, persistent }),
+    info: () => ({ deviceId: store.deviceId, persistent, problem }),
     listTrackers: (includeArchived = false) => store.listTrackers({ includeArchived }),
     getTracker: (id: string) => store.getTracker(id),
     listFields: (trackerId?: string) => store.listFields(trackerId),

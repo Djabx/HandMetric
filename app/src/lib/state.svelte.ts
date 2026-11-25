@@ -8,6 +8,8 @@ export const app = $state({
   ready: false,
   error: '' as string,
   persistent: true,
+  /** Si la base n'a pas pu s'ouvrir sur l'appareil : pourquoi (détail technique en plus). */
+  storageProblem: null as null | { issue: 'locked' | 'unsupported' | 'error'; detail: string },
   trackers: [] as Tracker[],
   archived: [] as Tracker[],
   /** Corbeille : compteurs supprimés, restaurables. */
@@ -122,6 +124,7 @@ export async function init() {
   try {
     const info = await db.call('info');
     app.persistent = info.persistent;
+    app.storageProblem = info.problem;
     await refresh();
     db.subscribe((remote) => void refresh(!remote));
     setInterval(() => checkAchievements(), 60_000);

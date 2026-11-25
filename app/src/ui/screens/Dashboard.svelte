@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Intro from '../components/Intro.svelte';
+  import { memoryWarning } from '../../lib/storage';
+  import { sync } from '../../lib/sync/sync.svelte';
   import { app, clock, viewOf, type TrackerView } from '../../lib/state.svelte';
   import { t } from '../../lib/i18n/index.svelte';
   import { go } from '../../lib/router.svelte';
@@ -78,19 +81,19 @@
   </header>
 
   {#if !app.persistent}
-    <p class="banner warn">{t('settings.storage.memory')}</p>
+    <p class="banner warn">{memoryWarning(app.storageProblem, sync.mode === 'server' && !!sync.user)}</p>
   {/if}
 
   {#if views.length === 0}
     <section class="empty">
       <h2>{t('dash.empty.title')}</h2>
       <p class="muted">{t('dash.empty.body')}</p>
-      <p><a href="#/about">{t('about.more')}</a></p>
       <div class="templates">
         {#each TEMPLATES as tpl (tpl.id)}
           <button class="btn" onclick={() => go(`new/${tpl.id}`)}>{tpl.icon} {t(tpl.name)}</button>
         {/each}
       </div>
+      <section class="card welcome"><Intro /></section>
     </section>
   {:else if reordering}
     <p class="small muted">{t('dash.reorder.help')}</p>
@@ -127,6 +130,7 @@
 {/if}
 
 <style>
+  .welcome { margin: 24px 0 88px; text-align: left; }
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   .reorder { list-style: none; margin: 0; padding: 4px 12px; }
   .reorder li {

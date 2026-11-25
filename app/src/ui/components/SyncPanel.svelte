@@ -80,6 +80,8 @@
   const scopeLabel = (s: TokenInfo['scope']) =>
     t(s === 'webhook' ? 'sync.token.scope.webhook' : s === 'export:read' ? 'sync.token.scope.export' : 'sync.token.scope.events');
   const linked = $derived(new Set(sync.identities.filter((i) => i.kind === 'oidc').map((i) => i.provider)));
+  /** Nom du compte, sinon l'e-mail d'un moyen de connexion. */
+  const signedInName = $derived(sync.user?.display_name || sync.identities.find((i) => i.label)?.label || null);
 </script>
 
 <section class="section">
@@ -91,7 +93,7 @@
   {:else}
     <div class="card stack">
       <div class="row">
-        <strong class="grow">{t('sync.signedInAs', { name: sync.user.display_name ?? '—' })}</strong>
+        <strong class="grow">{signedInName ? t('sync.signedInAs', { name: signedInName }) : t('sync.signedIn')}</strong>
         <button class="btn small" disabled={busy} onclick={() => run(logout)}>{t('sync.signOut')}</button>
       </div>
       <div class="row">

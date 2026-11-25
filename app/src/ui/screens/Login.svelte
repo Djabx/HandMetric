@@ -2,6 +2,7 @@
   /** Écran de connexion, affiché avant tout le reste quand l'app est servie par un serveur LifeLog. */
   import { t } from '../../lib/i18n/index.svelte';
   import SignIn from '../components/SignIn.svelte';
+  import Intro from '../components/Intro.svelte';
 
   const host = location.host;
 </script>
@@ -14,11 +15,11 @@
   </header>
   <p>{t('login.intro', { host })}</p>
   <SignIn />
-  <p class="small muted"><a href="#/about">{t('about.more')}</a></p>
+  <section class="card"><Intro /></section>
 </div>
 
 <style>
-  .login { max-width: 420px; padding-top: 48px; display: grid; gap: 16px; }
+  .login { max-width: 480px; padding-top: 48px; display: grid; gap: 16px; }
   .brand { display: grid; justify-items: center; gap: 6px; text-align: center; }
   .brand img { border-radius: 14px; }
   .brand h1 { margin: 0; }
