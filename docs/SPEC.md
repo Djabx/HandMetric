@@ -44,11 +44,11 @@ LifeLog est une **application pour soi**, pas une vitrine : rien n'est partagé 
 - Choisir le **mode d'affichage principal** :
   - *abstinence* : « temps depuis la dernière fois » (cigarette) ;
   - *fréquence* : « combien de fois » sur jour / semaine / mois (course).
-- Valeur numérique facultative avec unité (ex. course : `5.2 km`).
+- **Mesures** facultatives, une ou plusieurs par compteur, chacune avec son nom et son unité : course = distance (km) + durée (min), tension = systolique + diastolique (mmHg), sommeil = durée (h).
 
 **Événements**
 - Enregistrer un événement en un geste (bouton sur la carte du compteur). Horodatage = maintenant.
-- Modifier l'heure après coup (« j'ai oublié de noter ce matin »), ajouter une note ou une valeur.
+- Modifier l'heure après coup (« j'ai oublié de noter ce matin »), ajouter une note ou les mesures.
 - Supprimer un événement (suppression logique, voir sync).
 
 **Tableau de bord**
@@ -126,7 +126,6 @@ CREATE TABLE tracker (
   color        TEXT,                      -- #RRGGBB
   polarity     TEXT NOT NULL CHECK (polarity IN ('good','bad','neutral')),
   display_mode TEXT NOT NULL CHECK (display_mode IN ('abstinence','frequency')),
-  value_unit   TEXT,                      -- NULL = pas de valeur numérique
   goal_kind    TEXT CHECK (goal_kind IN ('max','min')),  -- NULL = pas d'objectif
   goal_count   INTEGER,                   -- ex. 5
   goal_period  TEXT CHECK (goal_period IN ('day','week','month')),
@@ -143,7 +142,7 @@ CREATE TABLE event (
   tracker_id   TEXT NOT NULL REFERENCES tracker(id),
   occurred_at  TEXT NOT NULL,             -- instant UTC
   tz_offset    INTEGER NOT NULL,          -- minutes, ex. +60 pour Paris en hiver
-  value        REAL,
+  measures     TEXT,                      -- JSON { "<field_id>": 5.2, … }, NULL si aucune mesure
   note         TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,             -- HLC
@@ -151,6 +150,19 @@ CREATE TABLE event (
   device_id    TEXT NOT NULL
 );
 CREATE INDEX event_by_tracker_time ON event(tracker_id, occurred_at);
+
+-- Mesures définies pour un compteur (0, 1 ou plusieurs)
+CREATE TABLE tracker_field (
+  id           TEXT PRIMARY KEY,          -- UUIDv7, clé utilisée dans event.measures
+  tracker_id   TEXT NOT NULL REFERENCES tracker(id),
+  name         TEXT NOT NULL,             -- « Distance », « Systolique »
+  unit         TEXT,                      -- code UCUM : km, min, mm[Hg], h, g, L
+  sort_order   REAL NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,             -- HLC
+  deleted_at   TEXT,
+  device_id    TEXT NOT NULL
+);
 
 -- Local au client, jamais exporté ni synchronisé
 CREATE TABLE sync_state (
@@ -170,6 +182,8 @@ Stocker un succès crée une seconde source de vérité. Si on corrige l'heure d
 - **Record d'abstinence** = plus grand écart entre deux événements consécutifs (ou entre le dernier et maintenant).
 - **Succès « 6 mois sans »** = débloqué si un écart ≥ 6 mois existe. *Actif* si c'est l'écart en cours, *historique* sinon.
 - **Série de jours** = jours locaux consécutifs (via `tz_offset`) avec au moins un événement.
+
+**Mesures.** Les valeurs d'un événement sont stockées en JSON dans `event.measures`, indexées par l'`id` du champ. Un événement reste ainsi une seule ligne, ce qui garde la sync et la fusion simples. Les requêtes passent par `json_extract` (SQLite) ou `jsonb` (PostgreSQL). Les valeurs dérivées (allure = durée / distance) sont calculées, pas stockées. Les unités suivent les codes **UCUM**, le standard utilisé par FHIR et Open mHealth (voir section 10).
 
 Les volumes attendus (quelques milliers d'événements par compteur et par an) permettent de tout calculer à la volée en SQL ou en mémoire. On ajoutera un cache si les mesures le justifient.
 
@@ -278,7 +292,7 @@ API HTTP JSON, versionnée sous `/api/v1`. Authentification décrite en 5.5.
 | `POST` | `/api/v1/changes` | Envoi d'un lot de lignes modifiées. Le serveur applique la règle 5.2 et renvoie le nouveau `cursor` |
 | `POST` | `/api/v1/import` | Envoi d'un fichier `.lifelog.sqlite` ou JSON (multipart). Même fusion que `changes` |
 | `GET` | `/api/v1/export?format=sqlite\|json` | Télécharge toutes les données du compte |
-| `POST` | `/api/v1/trackers/{id}/events` | Ajoute un événement (corps facultatif : `occurred_at`, `value`, `note`). Pour les scripts. |
+| `POST` | `/api/v1/trackers/{id}/events` | Ajoute un événement (corps facultatif : `occurred_at`, `measures`, `note`). Pour les scripts. |
 | `POST` | `/hooks/{token}` | **Webhook entrant** : ajoute un événement au compteur lié au jeton. Aucun en-tête requis, pour les outils qui ne savent faire qu'un simple POST. |
 
 Cycle client :
@@ -286,6 +300,16 @@ Cycle client :
 2. **Pull** : demander `changes?since=cursor` en boucle jusqu'à `has_more = false`, fusionner, enregistrer le `cursor`.
 
 Le serveur n'a aucune logique métier (pas de calcul de succès). Il stocke, fusionne et redistribue.
+
+**Sécurité des webhooks.** Le jeton dans l'URL fonctionne comme les webhooks Slack ou Discord (« URL à capacité ») : qui connaît l'URL peut ajouter un événement, et rien d'autre. Les protections :
+- **Impossible à deviner** : 256 bits aléatoires (CSPRNG), préfixe `lt_` pour le repérer dans un dépôt de code ou un log.
+- **Stocké haché** (SHA-256) : une fuite de la base ne donne pas les jetons.
+- **Portée minimale** : un jeton de webhook ne peut qu'ajouter un événement à **un** compteur. Pas de lecture, pas d'export, pas de modification.
+- **Révocable** depuis l'interface, avec la date de dernière utilisation affichée.
+- **HTTPS obligatoire** (assuré par le reverse proxy) et limitation de débit par jeton.
+- **Variante en en-tête** : `Authorization: Bearer lt_…` sur `/hooks`, pour les outils qui le permettent. Le jeton n'apparaît alors pas dans les logs d'accès du reverse proxy (Caddy journalise l'URL complète par défaut).
+
+Le pire cas d'une URL qui fuit est donc l'ajout d'événements parasites sur un compteur. On les supprime, on révoque le jeton et on en crée un autre.
 
 **Pousser des événements depuis l'extérieur.** Un jeton d'API limité à un compteur donne une URL de webhook, par exemple `https://lifelog.exemple.fr/hooks/lt_9f3a…`. Exemples d'usage : un raccourci iOS ou Android « J'ai fumé » sur l'écran d'accueil, une automatisation Home Assistant, un bouton NFC, un `curl` dans un script. L'événement créé passe par la même fusion que la sync, et arrive sur les appareils au prochain pull.
 
@@ -454,7 +478,10 @@ Hors v1. Deux familles, selon qu'elles exigent un serveur ou non.
 
 ### 8.1 Import de fichiers (sans serveur)
 
-Les montres et applis de sport exportent des fichiers **GPX**, **FIT** ou **TCX**. La PWA peut les lire localement : glisser un fichier (ou le partager vers la PWA via Share Target sur Android), et chaque activité devient un événement avec date, durée et distance en valeur. Aucun compte tiers, fonctionne hors ligne.
+La PWA lit ces fichiers localement, sans compte tiers et hors ligne. On glisse un fichier, ou on le partage vers la PWA (Share Target sur Android).
+
+- **GPX, FIT, TCX** (montres et applis de sport) : chaque activité devient un événement avec date, distance et durée.
+- **CSV** (historique d'une autre appli, export de tableur) : l'utilisateur indique quelle colonne est la date, quel compteur alimenter, et quelle colonne va dans quelle mesure. Le mapping est mémorisé pour les imports suivants.
 
 ### 8.2 Strava (serveur requis)
 
@@ -492,9 +519,10 @@ Décidé (revue du 2026-11-25) :
 - Objectifs (max ou min par période) dès la v1, sur les compteurs bons comme mauvais.
 - Intégrations : sources de données uniquement, rien vers les réseaux sociaux.
 - Jetons d'API et webhooks entrants pour pousser des événements.
+- **Plusieurs mesures par compteur** (course : distance + durée, tension : systolique + diastolique), stockées en JSON dans l'événement, unités UCUM.
+- **CSV** : export simple en v1, import avec choix des colonnes plus tard (section 8.1).
 - Licence MIT.
 
 Encore ouvert :
 
-- **Plusieurs mesures par événement** (« 5 km en 40 min ») : un seul champ `value` couvre « 5 km », « 40 min » ou « 8 h de sommeil », mais pas les deux à la fois. Proposition 🟡 : une table `tracker_field` (nom, unité) et des valeurs par champ dans l'événement, ce qui permettrait aussi de calculer une allure. À trancher avant de figer le schéma v1, car l'import Strava en profiterait.
-- **CSV** : utile surtout en **import**, pour récupérer l'historique d'une autre appli. L'utilisateur choisirait quelle colonne est la date, laquelle est la valeur, etc. Proposition 🟡 : export CSV simple en v1, import CSV avec ce choix de colonnes plus tard.
+- **Correspondance avec les standards santé.** Il n'existe pas de standard pour des « événements de vie » en général. Les plus proches couvrent la santé : **HL7 FHIR** (ressource `Observation`, codes **LOINC**, très complet mais lourd), **Open mHealth** (schémas JSON simples, ex. `blood-pressure`), et les types d'Apple Santé ou de Google Health Connect (propriétaires, mais standards de fait). Proposition 🟡 : garder notre format, utiliser les unités UCUM dès la v1, et permettre plus tard d'associer un champ à un code LOINC (ex. systolique = `8480-6`) pour exporter en FHIR ou Open mHealth si besoin.
