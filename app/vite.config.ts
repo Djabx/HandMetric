@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// BASE : "/HandMetric/" pour GitHub Pages, "/" quand la PWA est servie par le serveur.
+// BASE : "/lifelog/" pour GitHub Pages, "/" quand la PWA est servie par le serveur.
 const base = process.env.LIFELOG_BASE ?? './';
 
 export default defineConfig({
