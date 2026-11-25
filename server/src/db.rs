@@ -26,6 +26,14 @@ enum Ty {
 
 pub const TABLES: [&str; 3] = ["tracker", "tracker_field", "event"];
 
+/// Effacement définitif : identifiant de la ligne effacée, sans aucun contenu.
+const PURGE_COLUMNS: &[(&str, Ty)] = &[
+    ("id", Ty::Text),
+    ("tbl", Ty::Text),
+    ("updated_at", Ty::Text),
+    ("device_id", Ty::Text),
+];
+
 fn columns(table: &str) -> &'static [(&'static str, Ty)] {
     use Ty::*;
     match table {
@@ -70,6 +78,7 @@ fn columns(table: &str) -> &'static [(&'static str, Ty)] {
             ("deleted_at", OptText),
             ("device_id", Text),
         ],
+        "purge" => PURGE_COLUMNS,
         _ => unreachable!("table inconnue"),
     }
 }
@@ -83,6 +92,9 @@ pub struct ChangeSet {
     pub tracker_field: Vec<Row>,
     #[serde(default)]
     pub event: Vec<Row>,
+    /// Effacements définitifs (synchronisés, jamais exportés).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub purge: Vec<Row>,
 }
 
 impl ChangeSet {
@@ -90,6 +102,7 @@ impl ChangeSet {
         match t {
             "tracker" => &self.tracker,
             "tracker_field" => &self.tracker_field,
+            "purge" => &self.purge,
             _ => &self.event,
         }
     }
@@ -97,11 +110,12 @@ impl ChangeSet {
         match t {
             "tracker" => &mut self.tracker,
             "tracker_field" => &mut self.tracker_field,
+            "purge" => &mut self.purge,
             _ => &mut self.event,
         }
     }
     pub fn len(&self) -> usize {
-        self.tracker.len() + self.tracker_field.len() + self.event.len()
+        self.tracker.len() + self.tracker_field.len() + self.event.len() + self.purge.len()
     }
     pub fn is_empty(&self) -> bool {
         self.len() == 0
@@ -156,6 +170,12 @@ pub fn sanitize(table: &str, raw: &Row) -> Option<Row> {
                 return None;
             }
         }
+        "purge" => {
+            let tbl = out.get("tbl").and_then(|v| v.as_str())?;
+            if !TABLES.contains(&tbl) {
+                return None;
+            }
+        }
         "event" => {
             if let Some(Value::String(m)) = out.get("measures") {
                 match serde_json::from_str::<Value>(m) {
@@ -180,10 +200,12 @@ pub struct Db {
 const PG_MIGRATIONS: &[&str] = &[
     include_str!("../migrations/postgres/0001_init.sql"),
     include_str!("../migrations/postgres/0002_achievements.sql"),
+    include_str!("../migrations/postgres/0003_purge.sql"),
 ];
 const SQLITE_MIGRATIONS: &[&str] = &[
     include_str!("../migrations/sqlite/0001_init.sql"),
     include_str!("../migrations/sqlite/0002_achievements.sql"),
+    include_str!("../migrations/sqlite/0003_purge.sql"),
 ];
 
 impl Db {
@@ -285,6 +307,51 @@ impl Db {
         sqlx::query("UPDATE seq_counter SET value = value WHERE id = 1")
             .execute(&mut *tx)
             .await?;
+        // Les effacements d'abord : une ligne effacée ne revient jamais, même plus récente.
+        for raw in &changes.purge {
+            let Some(row) = sanitize("purge", raw) else {
+                sum.ignored += 1;
+                continue;
+            };
+            let s = |c: &str| row[c].as_str().unwrap_or_default().to_string();
+            let (id, tbl) = (s("id"), s("tbl"));
+            let seq = next_seq(&mut tx).await?;
+            let done = sqlx::query(
+                "INSERT INTO purge (user_id, id, tbl, updated_at, device_id, server_seq) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (user_id, id) DO NOTHING",
+            )
+            .bind(user_id)
+            .bind(&id)
+            .bind(&tbl)
+            .bind(s("updated_at"))
+            .bind(s("device_id"))
+            .bind(seq)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected();
+            if done == 0 {
+                sum.ignored += 1;
+                continue;
+            }
+            if tbl == "tracker" {
+                for child in ["event", "tracker_field"] {
+                    sqlx::query(sqlx::AssertSqlSafe(format!(
+                        "DELETE FROM {child} WHERE user_id = $1 AND tracker_id = $2"
+                    )))
+                    .bind(user_id)
+                    .bind(&id)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+            }
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "DELETE FROM {tbl} WHERE user_id = $1 AND id = $2"
+            )))
+            .bind(user_id)
+            .bind(&id)
+            .execute(&mut *tx)
+            .await?;
+            sum.inserted += 1;
+        }
         for table in TABLES {
             let cols = columns(table);
             let names: Vec<&str> = cols.iter().map(|(c, _)| *c).collect();
@@ -311,6 +378,19 @@ impl Db {
                 };
                 let id = row["id"].as_str().unwrap_or_default();
                 let updated_at = row["updated_at"].as_str().unwrap_or_default();
+                let parent = row.get("tracker_id").and_then(Value::as_str).unwrap_or(id);
+                let purged =
+                    sqlx::query("SELECT id FROM purge WHERE user_id = $1 AND (id = $2 OR id = $3)")
+                        .bind(user_id)
+                        .bind(id)
+                        .bind(parent)
+                        .fetch_optional(&mut *tx)
+                        .await?
+                        .is_some();
+                if purged {
+                    sum.ignored += 1;
+                    continue;
+                }
                 let current: Option<String> = sqlx::query(sqlx::AssertSqlSafe(format!(
                     "SELECT updated_at FROM {table} WHERE user_id = $1 AND id = $2"
                 )))
@@ -323,12 +403,7 @@ impl Db {
                     sum.ignored += 1;
                     continue;
                 }
-                let seq: i64 = sqlx::query(
-                    "UPDATE seq_counter SET value = value + 1 WHERE id = 1 RETURNING value",
-                )
-                .fetch_one(&mut *tx)
-                .await?
-                .get::<i64, _>("value");
+                let seq = next_seq(&mut tx).await?;
                 let mut q = sqlx::query(sqlx::AssertSqlSafe(sql.as_str())).bind(user_id);
                 for (col, ty) in cols {
                     let v = &row[*col];
@@ -359,7 +434,7 @@ impl Db {
     ) -> Result<(ChangeSet, i64, bool)> {
         let mut all: Vec<(i64, &str, Row)> = Vec::new();
         let mut truncated = false;
-        for table in TABLES {
+        for table in ["purge", "tracker", "tracker_field", "event"] {
             let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
                 "SELECT * FROM {table} WHERE user_id = $1 AND server_seq > $2 ORDER BY server_seq LIMIT $3"
             )))
@@ -430,6 +505,15 @@ impl Db {
             .map(|r| (r.get::<String, _>("id"), r.get::<String, _>("name")))
             .collect())
     }
+}
+
+async fn next_seq(tx: &mut sqlx::Transaction<'_, sqlx::Any>) -> Result<i64> {
+    Ok(
+        sqlx::query("UPDATE seq_counter SET value = value + 1 WHERE id = 1 RETURNING value")
+            .fetch_one(&mut **tx)
+            .await?
+            .get::<i64, _>("value"),
+    )
 }
 
 fn decode(table: &str, r: &AnyRow) -> Result<Row> {

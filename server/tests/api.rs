@@ -182,6 +182,83 @@ async fn sync_push_pull_merge() {
 }
 
 #[tokio::test]
+async fn purge_erases_rows_for_good() {
+    for (url, state) in backends().await {
+        let c = login(&state).await;
+        let data = json!({ "changes": {
+            "tracker": [tracker("t1", "Cigarette", "1795600000000-0000-dev1"), tracker("t2", "Course", "1795600000000-0000-dev1")],
+            "tracker_field": [field("f1", "t1", "Nombre", "")],
+            "event": [event("e1", "t1", "1795600000001-0000-dev1"), event("e2", "t2", "1795600000001-0000-dev1"), event("e3", "t2", "1795600000002-0000-dev1")],
+        }});
+        c.req("POST", "/api/v1/changes", Some(data.clone()), None)
+            .await;
+        let (_, v, _) = c.req("GET", "/api/v1/changes?since=0", None, None).await;
+        let cursor = v["cursor"].as_i64().unwrap();
+
+        // Compteur t1 (avec champ et événement) et événement e3 effacés.
+        let purge = json!({ "changes": { "purge": [
+            {"id": "t1", "tbl": "tracker", "updated_at": "1795600000010-0000-dev1", "device_id": "dev1"},
+            {"id": "e3", "tbl": "event", "updated_at": "1795600000011-0000-dev1", "device_id": "dev1"},
+            {"id": "x", "tbl": "app_user", "updated_at": "1795600000011-0000-dev1", "device_id": "dev1"},
+        ]}});
+        let (s, v, _) = c.req("POST", "/api/v1/changes", Some(purge), None).await;
+        assert_eq!(s, StatusCode::OK, "{url} {v}");
+        assert_eq!(v["summary"]["inserted"], 2, "{url}");
+        assert_eq!(v["summary"]["ignored"], 1, "{url}");
+
+        // Plus aucune ligne en base, à part l'identifiant effacé.
+        let (_, me, _) = c.req("GET", "/api/v1/me", None, None).await;
+        let uid = me["user"]["id"].as_str().unwrap().to_string();
+        for (table, n) in [
+            ("tracker", 1),
+            ("tracker_field", 0),
+            ("event", 1),
+            ("purge", 2),
+        ] {
+            let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT COUNT(*) FROM {table} WHERE user_id = $1"
+            )))
+            .bind(&uid)
+            .fetch_one(&state.db.pool)
+            .await
+            .unwrap();
+            assert_eq!(count, n, "{url} {table}");
+        }
+
+        // Les autres appareils reçoivent l'effacement.
+        let (_, v, _) = c
+            .req(
+                "GET",
+                &format!("/api/v1/changes?since={cursor}"),
+                None,
+                None,
+            )
+            .await;
+        let ids: Vec<&str> = v["changes"]["purge"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec!["t1", "e3"], "{url}");
+        assert!(v["changes"]["purge"][0].get("user_id").is_none());
+
+        // Un appareil en retard qui renvoie les anciennes lignes, même plus récentes, ne les fait pas revenir.
+        let stale = json!({ "changes": {
+            "tracker": [tracker("t1", "Cigarette", "1795700000000-0000-dev2")],
+            "tracker_field": [field("f1", "t1", "Nombre", "")],
+            "event": [event("e1", "t1", "1795700000001-0000-dev2"), event("e3", "t2", "1795700000002-0000-dev2")],
+        }});
+        let (_, v, _) = c.req("POST", "/api/v1/changes", Some(stale), None).await;
+        assert_eq!(v["summary"]["ignored"], 4, "{url}");
+        let (_, v, _) = c.req("GET", "/api/v1/export?format=json", None, None).await;
+        assert_eq!(v["trackers"].as_array().unwrap().len(), 1, "{url}");
+        assert_eq!(v["events"].as_array().unwrap().len(), 1, "{url}");
+        assert!(v.get("purge").is_none(), "{url}");
+    }
+}
+
+#[tokio::test]
 async fn tokens_webhooks_export_import() {
     for (url, state) in backends().await {
         let c = login(&state).await;

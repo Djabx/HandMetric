@@ -82,6 +82,22 @@ export const ADDED_COLUMNS: { table: SyncTable; column: string; type: string }[]
   { table: 'tracker', column: 'achievements', type: 'INTEGER' },
 ];
 
+/**
+ * Effacements définitifs : seul l'identifiant de la ligne effacée reste (avec la table et
+ * l'estampille), pour que l'effacement se propage et qu'aucun appareil ne la ressuscite.
+ * Synchronisée, mais jamais exportée : un export ne contient que des données.
+ */
+export const PURGE_TABLES = ['tracker', 'tracker_field', 'event'] as const;
+export const PURGE_COLUMNS = ['id', 'tbl', 'updated_at', 'device_id'] as const;
+export const PURGE_SCHEMA = `
+CREATE TABLE IF NOT EXISTS purge (
+  id         TEXT PRIMARY KEY,
+  tbl        TEXT NOT NULL CHECK (tbl IN ('tracker','tracker_field','event')),
+  updated_at TEXT NOT NULL,
+  device_id  TEXT NOT NULL
+);
+`;
+
 /** Tables locales, jamais exportées ni synchronisées. */
 export const LOCAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS sync_state (

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { app, toast } from '../../lib/state.svelte';
   import { db } from '../../lib/db/client';
-  import { fmtDate, i18n, setLang, t, type Lang } from '../../lib/i18n/index.svelte';
+  import { fmtDate, fmtDateTime, i18n, setLang, t, type Lang } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
   import { download, stamp } from '../../lib/io/download';
   import { APP_VERSION, TRASH_DAYS } from '../../lib/db/store';
@@ -99,10 +99,11 @@
     </section>
   {/if}
 
-  {#if app.deleted.length}
+  {#if app.deleted.length || app.deletedEvents.length}
     <section class="section">
       <h2>{t('settings.trash')}</h2>
       <p class="small muted">{t('settings.trash.help')}</p>
+      {#if app.deleted.length}
       <ul class="list card" style="padding:0 16px">
         {#each app.deleted as tr (tr.id)}
           <li class="row" style="padding:8px 0">
@@ -128,6 +129,35 @@
           </li>
         {/each}
       </ul>
+      {/if}
+      {#if app.deletedEvents.length}
+        <h3 class="trash-sub">{t('settings.trash.events')}</h3>
+        <ul class="list card" style="padding:0 16px">
+          {#each app.deletedEvents as ev (ev.id)}
+            <li class="row" style="padding:8px 0">
+              <div class="grow">
+                <div>{ev.tracker_icon ?? ''} {ev.tracker_name} · {fmtDateTime(ev.occurred_at)}</div>
+                <div class="small muted">{t('settings.trash.eventMeta', { date: fmtDate(ev.deleted_at!), purge: fmtDate(purgeDate(ev.deleted_at!)) })}</div>
+              </div>
+              <div class="trash-actions">
+                <button
+                  class="btn small"
+                  onclick={async () => {
+                    await db.write('restoreEvent', ev.id);
+                    toast(t('settings.trash.eventRestored'), { icon: '♻️' });
+                  }}>{t('settings.trash.restore')}</button>
+                <button
+                  class="btn small danger"
+                  onclick={async () => {
+                    if (!confirm(t('settings.trash.eventPurgeConfirm'))) return;
+                    await db.write('purgeEvent', ev.id);
+                    toast(t('settings.trash.eventPurged'), { icon: '🔥' });
+                  }}>{t('settings.trash.purge')}</button>
+              </div>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </section>
   {/if}
 
@@ -141,6 +171,7 @@
 </div>
 
 <style>
+  .trash-sub { font-size: 1rem; margin: 16px 0 8px; }
   h3 { font-size: 1rem; margin: 16px 0 8px; }
   .trash-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
   .linkish { text-align: left; border: 0; background: none; cursor: pointer; padding: 8px 0; }

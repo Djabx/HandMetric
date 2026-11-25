@@ -49,7 +49,7 @@ LifeLog est une **application pour soi**, pas une vitrine : rien n'est partagé 
 **Événements**
 - Enregistrer un événement en un geste (bouton sur la carte du compteur). Horodatage = maintenant.
 - Modifier l'heure après coup (« j'ai oublié de noter ce matin »), ajouter une note ou les mesures.
-- Supprimer un événement (suppression logique, voir sync).
+- Supprimer un événement : il va à la corbeille (Réglages), restaurable 30 jours, puis effacé définitivement.
 
 **Tableau de bord**
 - Une carte par compteur, avec la statistique principale en grand et mise à jour en direct (« 182 j 4 h sans 🚬 »).
@@ -107,7 +107,8 @@ LifeLog est une **application pour soi**, pas une vitrine : rien n'est partagé 
 
 - **Identifiants UUIDv7** générés par le client. Ils sont uniques sans coordination et triables dans le temps, ce qui rend la fusion d'exports et la sync triviales.
 - **Instants en UTC** (ISO 8601, millisecondes) + **décalage horaire local** au moment de l'événement, pour que « mardi 23 h à Tokyo » reste mardi dans les statistiques.
-- **Suppression logique** (`deleted_at`) : une suppression est une modification comme une autre, elle se propage par la sync et par l'import.
+- **Suppression logique** (`deleted_at`) : mettre à la corbeille est une modification comme une autre, elle se propage par la sync et par l'import.
+- **Effacement définitif** (corbeille vidée à la main ou après 30 jours) : les lignes sont réellement supprimées, sur l'appareil comme sur le serveur. Seul l'identifiant aléatoire de la ligne effacée reste, dans la table `purge` (avec la table d'origine et l'estampille), pour propager l'effacement et refuser qu'un appareil en retard la fasse revenir. Un effacement de compteur emporte ses champs et ses événements. Les exports ne contiennent pas `purge`.
 - **Chaque ligne synchronisable** porte `updated_at` (horloge logique hybride, voir 5.2) et `device_id`.
 - Le **même schéma** est utilisé dans le client, dans le fichier d'export, et (aux types près) sur le serveur.
 

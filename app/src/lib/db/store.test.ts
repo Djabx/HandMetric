@@ -126,9 +126,11 @@ describe('Store', () => {
     expect(b.getTracker(t.id)?.name).toBe('Cigarette');
   });
 
-  it('supprime définitivement depuis la corbeille et propage la purge', async () => {
-    const a = await newStore();
-    const b = await newStore();
+  it('supprime définitivement depuis la corbeille : plus rien en base, ici comme ailleurs', async () => {
+    const sqlA = await memorySql();
+    const sqlB = await memorySql();
+    const a = new Store(sqlA);
+    const b = new Store(sqlB);
     const t = a.saveTracker(
       { name: 'Tension', icon: '🩺', color: null, polarity: 'neutral', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null },
       [{ name: 'Systole', unit: 'mm[Hg]' }],
@@ -136,6 +138,7 @@ describe('Store', () => {
     const [f] = a.listFields(t.id);
     a.saveEvent({ tracker_id: t.id, measures: { [f.id]: 12 }, note: 'secret' });
     b.merge(a.snapshot());
+    const stale = b.changesSince('');
     a.deleteTracker(t.id);
     expect(a.listDeletedTrackers()).toHaveLength(1);
     a.purgeTracker(t.id);
@@ -143,12 +146,53 @@ describe('Store', () => {
     a.restoreTracker(t.id);
     expect(a.listTrackers()).toHaveLength(0);
     b.merge(a.changesSince(''));
-    expect(b.listTrackers()).toHaveLength(0);
-    expect(b.listDeletedTrackers()).toHaveLength(0);
-    const dump = JSON.stringify(b.snapshot());
-    expect(dump).not.toContain('Tension');
-    expect(dump).not.toContain('Systole');
-    expect(dump).not.toContain('secret');
+    const count = (sql: typeof sqlA, table: string) => sql.all<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`)[0].n;
+    for (const sql of [sqlA, sqlB]) {
+      for (const table of ['tracker', 'tracker_field', 'event']) expect(count(sql, table)).toBe(0);
+      expect(sql.all('SELECT * FROM purge')).toEqual([expect.objectContaining({ id: t.id, tbl: 'tracker' })]);
+    }
+    // Un appareil en retard renvoie les anciennes lignes : elles ne reviennent pas.
+    const sum = a.merge(stale);
+    expect(sum.inserted + sum.updated).toBe(0);
+    expect(count(sqlA, 'event')).toBe(0);
+    // L'export ne contient que des données.
+    expect(a.snapshot()).toEqual({ tracker: [], tracker_field: [], event: [] });
+  });
+
+  it('met les événements supprimés à la corbeille, restaurables ou effaçables', async () => {
+    const sqlA = await memorySql();
+    const a = new Store(sqlA);
+    const b = await newStore();
+    const t = a.saveTracker({ name: 'Cigarette', icon: '🚬', color: null, polarity: 'bad', display_mode: 'abstinence', goal_kind: null, goal_count: null, goal_period: null });
+    const e1 = a.saveEvent({ tracker_id: t.id });
+    const e2 = a.saveEvent({ tracker_id: t.id });
+    a.deleteEvent(e1.id);
+    a.deleteEvent(e2.id);
+    expect(a.listDeletedEvents().map((e) => [e.id, e.tracker_name])).toEqual([
+      [e2.id, 'Cigarette'],
+      [e1.id, 'Cigarette'],
+    ]);
+    a.restoreEvent(e1.id);
+    expect(a.listEvents(t.id).map((e) => e.id)).toEqual([e1.id]);
+    b.merge(a.changesSince(''));
+    expect(b.listDeletedEvents()).toHaveLength(1);
+    a.purgeEvent(e2.id);
+    a.purgeEvent(e1.id); // pas à la corbeille : ignoré
+    expect(sqlA.all('SELECT id FROM event')).toEqual([{ id: e1.id }]);
+    b.merge(a.changesSince(''));
+    expect(b.listDeletedEvents()).toHaveLength(0);
+    expect(b.listEvents(t.id)).toHaveLength(1);
+  });
+
+  it('efface pour de bon les anciens compteurs vidés (∅)', async () => {
+    const sql = await memorySql();
+    const s = new Store(sql);
+    const t = s.saveTracker({ name: 'Vieux', icon: null, color: null, polarity: 'good', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null });
+    s.saveEvent({ tracker_id: t.id });
+    sql.run("UPDATE tracker SET name = '∅', deleted_at = ?", [new Date().toISOString()]);
+    expect(s.purgeExpiredTrash()).toBe(1);
+    expect(sql.all('SELECT id FROM tracker')).toEqual([]);
+    expect(sql.all('SELECT id FROM event')).toEqual([]);
   });
 
   it('vide la corbeille après 30 jours', async () => {
@@ -157,11 +201,15 @@ describe('Store', () => {
       s.saveTracker({ name, icon: null, color: null, polarity: 'good', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null });
     const old = mk('Ancien');
     const recent = mk('Récent');
+    const kept = mk('Gardé');
+    s.deleteEvent(s.saveEvent({ tracker_id: kept.id }).id);
     s.deleteTracker(old.id);
     s.deleteTracker(recent.id);
     const in31days = Date.now() + 31 * 86_400_000;
     expect(s.purgeExpiredTrash(30, Date.now() + 10 * 86_400_000)).toBe(0);
-    expect(s.purgeExpiredTrash(30, in31days)).toBe(2);
+    expect(s.purgeExpiredTrash(30, in31days)).toBe(3);
+    expect(s.listDeletedEvents()).toHaveLength(0);
+    expect(s.listTrackers()).toHaveLength(1);
     expect(s.listDeletedTrackers()).toHaveLength(0);
     expect(s.purgeExpiredTrash(30, in31days)).toBe(0);
   });
