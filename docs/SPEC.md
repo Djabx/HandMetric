@@ -1,8 +1,8 @@
 # LifeLog : spécification v0.1
 
-*Statut : brouillon, 2026-11-25.*
+*Statut : v1 implémentée, 2026-11-25. Les écarts entre la spec initiale et le code sont listés en [section 11](#11-écarts-dimplémentation-v1).*
 
-Les points marqués **🟡 Hypothèse** sont des choix faits par défaut, à confirmer. Les décisions déjà prises et les questions encore ouvertes sont en [section 10](#10-décisions-et-questions-ouvertes).
+Les décisions prises et les questions encore ouvertes sont en [section 10](#10-décisions-et-questions-ouvertes).
 
 ---
 
@@ -187,51 +187,60 @@ Stocker un succès crée une seconde source de vérité. Si on corrige l'heure d
 
 Les volumes attendus (quelques milliers d'événements par compteur et par an) permettent de tout calculer à la volée en SQL ou en mémoire. On ajoutera un cache si les mesures le justifient.
 
-### 4.4 Schéma serveur (PostgreSQL)
+### 4.4 Schéma serveur (PostgreSQL et SQLite)
 
-Mêmes tables, avec ces différences :
+Mêmes tables que le client, avec ces différences :
 
-| Colonne | SQLite client | PostgreSQL serveur |
+| Colonne | SQLite client | Serveur |
 |---|---|---|
-| `id`, `tracker_id` | `TEXT` | `UUID` |
-| dates | `TEXT` ISO 8601 | `TIMESTAMPTZ` (sauf `updated_at` : `TEXT` HLC) |
-| en plus | | `user_id UUID NOT NULL REFERENCES app_user(id)` |
-| en plus | | `server_seq BIGINT` (séquence globale, mise à jour à chaque écriture) |
+| en plus | | `user_id TEXT NOT NULL REFERENCES app_user(id)`, clé primaire `(user_id, id)` |
+| en plus | | `server_seq BIGINT` (séquence par serveur, mise à jour à chaque écriture) |
+
+**Décidé à l'implémentation** : identifiants et dates restent en `TEXT` sur PostgreSQL aussi (UUID et ISO 8601 sous forme de chaînes). Le serveur utilise ainsi exactement les mêmes requêtes SQL sur les deux moteurs (pilote `Any` de sqlx), et une ligne fait l'aller-retour client → serveur → export sans conversion. Les migrations sont dans `server/migrations/{postgres,sqlite}`.
 
 Tables propres au serveur, jamais exportées :
 
 ```sql
 CREATE TABLE app_user (
-  id           UUID PRIMARY KEY,
+  id           TEXT PRIMARY KEY,
   display_name TEXT,
-  created_at   TIMESTAMPTZ NOT NULL
+  created_at   TEXT NOT NULL
 );
 
 -- Une ligne par moyen de connexion lié au compte
 CREATE TABLE identity (
-  id           UUID PRIMARY KEY,
-  user_id      UUID NOT NULL REFERENCES app_user(id),
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
   kind         TEXT NOT NULL CHECK (kind IN ('oidc','passkey')),
-  provider     TEXT,             -- nom du fournisseur OIDC dans la config
-  subject      TEXT,             -- claim `sub` OIDC
-  credential   BYTEA,            -- clé publique WebAuthn
-  created_at   TIMESTAMPTZ NOT NULL,
+  provider     TEXT NOT NULL,    -- nom du fournisseur OIDC dans la config, ou 'passkey'
+  subject      TEXT NOT NULL,    -- claim `sub` OIDC, ou identifiant de la clé
+  label        TEXT,             -- affiché dans « Moyens de connexion »
+  credential   TEXT,             -- passkey WebAuthn sérialisée (clé publique)
+  created_at   TEXT NOT NULL,
+  last_used_at TEXT,
   UNIQUE (provider, subject)
 );
 
+CREATE TABLE session (
+  token_hash TEXT PRIMARY KEY,   -- SHA-256 du cookie
+  user_id    TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
 CREATE TABLE api_token (
-  id           UUID PRIMARY KEY,
-  user_id      UUID NOT NULL REFERENCES app_user(id),
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
   name         TEXT NOT NULL,
-  token_hash   TEXT NOT NULL,    -- seul le hash est stocké
-  scopes       TEXT[] NOT NULL,  -- ex. {events:write}, {export:read}
-  tracker_id   UUID,             -- jeton limité à un compteur (webhook)
-  created_at   TIMESTAMPTZ NOT NULL,
-  last_used_at TIMESTAMPTZ
+  token_hash   TEXT NOT NULL UNIQUE, -- seul le hash est stocké
+  scope        TEXT NOT NULL,        -- webhook, events:write ou export:read
+  tracker_id   TEXT,                 -- jeton limité à un compteur (webhook)
+  created_at   TEXT NOT NULL,
+  last_used_at TEXT
 );
 ```
 
-Le backend SQLite du serveur reprend le même schéma, avec les types SQLite.
+Le backend SQLite du serveur reprend le même schéma (`REAL` et `INTEGER` à la place de `DOUBLE PRECISION` et `BIGINT`).
 
 ## 5. Export, import et synchronisation
 
@@ -337,7 +346,7 @@ Fonctionnement :
   - `registration.enabled = false` ferme toute nouvelle inscription ;
   - `allowRegistration` par fournisseur OIDC limite les inscriptions à une population (par exemple, seulement les comptes de son IdP perso, alors que Google sert à se connecter à un compte existant) ;
   - une passkey seule ne crée un compte que si l'inscription par passkey est ouverte. Sinon, on l'ajoute depuis un compte déjà connecté.
-- Après connexion, le serveur ouvre une session par cookie (`HttpOnly`, `Secure`, `SameSite=Strict`).
+- Après connexion, le serveur ouvre une session par cookie `lifelog_session` (`HttpOnly`, `Secure` dès que l'URL publique est en HTTPS, `SameSite=Lax`, 90 jours). `Lax` et non `Strict` : avec `Strict`, le navigateur n'enverrait pas le cookie au retour d'un fournisseur OIDC. Seul le hash du cookie est stocké.
 - Plusieurs passkeys et identités OIDC peuvent être liées au même compte (téléphone, ordinateur, Google…).
 - Chaque utilisateur peut créer des **jetons d'API** depuis l'interface : pour la sauvegarde automatisée (`export:read`) et pour **pousser des événements** (`events:write`, webhook, voir 5.4).
 
@@ -350,12 +359,13 @@ Fonctionnement :
 ```
 app/
   src/
-    ui/            composants et écrans
-    domain/        calculs : durées, séries, succès (fonctions pures, testées)
-    db/            SQLite WASM dans un Web Worker, migrations, requêtes
-    sync/          HLC, fusion, client HTTP
-    export/        export/import SQLite et JSON
-  public/manifest.webmanifest
+    ui/            écrans et composants Svelte
+    lib/domain/    calculs : durées, séries, objectifs, succès (fonctions pures, testées)
+    lib/db/        SQLite WASM dans un Web Worker, schéma, HLC, fusion, export/import
+    lib/sync/      client HTTP, passkeys, cycle push/pull
+    lib/i18n/      dictionnaires FR et EN
+    lib/io/        CSV, téléchargement
+  public/          icônes (le manifest est généré par vite-plugin-pwa)
 ```
 
 - La base tourne dans un **Web Worker** (exigence d'OPFS pour l'accès synchrone, et l'UI ne bloque pas).
@@ -366,26 +376,25 @@ app/
 
 ```
 server/
-  crates/
-    lifelog-core/     types, HLC, règle de fusion, migrations de format d'export
-    lifelog-storage/  trait Storage + impl. postgres et sqlite (features Cargo)
-    lifelog-server/   binaire axum : API, auth (passkeys, OIDC), CLI d'admin
+  migrations/      SQL PostgreSQL et SQLite
+  src/
+    config.rs      fichier TOML + variables LIFELOG_*
+    db.rs          fusion, curseur, instantané (mêmes requêtes sur les deux moteurs)
+    auth/          sessions, jetons, passkeys, OIDC
+    api.rs         routes /api/v1 et /hooks
+    export.rs      export/import SQLite et JSON
+  tests/           tests d'intégration (SQLite, et PostgreSQL si LIFELOG_TEST_PG)
 ```
 
-```rust
-#[async_trait]
-pub trait Storage: Send + Sync {
-    async fn changes_since(&self, user: UserId, cursor: i64, limit: u32) -> Result<ChangeSet>;
-    async fn apply(&self, user: UserId, rows: Vec<Row>) -> Result<Cursor>;
-    async fn export(&self, user: UserId) -> Result<Snapshot>;
-}
-```
+**Décidé à l'implémentation** : une seule crate plutôt que trois, et pas de trait `Storage`. Le pilote `Any` de sqlx exécute les mêmes requêtes sur PostgreSQL et SQLite, ce qui rend l'abstraction inutile pour l'instant. On découpera si un troisième moteur ou un deuxième binaire apparaît.
+
+Pas de CLI d'administration : la configuration suffit. `lifelog-server --check` valide la configuration et la base, puis quitte.
 
 Configuration par variables d'environnement, par exemple `LIFELOG_DATABASE_URL=postgres://…` ou `sqlite:///data/lifelog.db`. Le schéma d'URL choisit l'implémentation. Les réglages structurés (liste des fournisseurs OIDC) vont dans un fichier TOML désigné par `LIFELOG_CONFIG`. Les secrets ne sont jamais écrits en clair : la configuration référence des fichiers (`client_secret_file`), ce qui marche directement avec sops-nix ou agenix.
 
-Le serveur écoute en HTTP sur une adresse locale. Il est prévu pour être placé derrière un reverse proxy (Caddy, nginx) qui gère le TLS. Il fait confiance aux en-têtes `X-Forwarded-*` uniquement venant des proxies déclarés, et il connaît son URL publique (`LIFELOG_PUBLIC_URL`), nécessaire pour les passkeys et les retours OIDC.
+Le serveur écoute en HTTP sur une adresse locale. Il est prévu pour être placé derrière un reverse proxy (Caddy, nginx) qui gère le TLS. Il n'utilise pas les en-têtes `X-Forwarded-*` : il connaît son URL publique (`LIFELOG_PUBLIC_URL`), nécessaire pour les passkeys et les retours OIDC.
 
-Distribution : un module NixOS, un binaire statique et une image Docker (construite par le flake, voir 6.4). Un `docker-compose.yml` d'exemple avec PostgreSQL.
+Distribution : un module NixOS, un paquet Nix et une image Docker (construite par le flake, voir 6.4). Un `docker-compose.yml` d'exemple avec PostgreSQL est dans `docs/`.
 
 ### 6.3 Redis
 
@@ -402,13 +411,13 @@ Le dépôt fournit un **`flake.nix` à la racine**, dès le squelette (étape 1 
 
 | Sortie | Contenu |
 |---|---|
-| `devShells.default` | Toolchain Rust (via `rust-overlay` ou `fenix`, version épinglée), Node.js + pnpm, `sqlx-cli`, `sqlite`, `postgresql` (client et serveur local de test), outils de lint. `nix develop` suffit pour tout builder et tester. |
-| `packages.server` | Binaire `lifelog-server` (via `crane` pour profiter du cache des dépendances Cargo). |
-| `packages.app` | PWA buildée (fichiers statiques), via `pnpm` et un hash des dépendances fixé. |
-| `packages.default` | Le serveur, avec la PWA embarquée pour qu'il la serve sur la même origine (voir 5.5). |
+| `devShells.default` | Rust de nixpkgs (cargo, clippy, rustfmt, rust-analyzer), Node.js 22 + pnpm, `sqlite`, `postgresql`. `nix develop` suffit pour tout builder et tester. |
+| `packages.server` | Binaire `lifelog-server` (`rustPlatform.buildRustPackage`), avec la PWA embarquée pour qu'il la serve sur la même origine (voir 5.5). Les tests Rust tournent pendant le build. |
+| `packages.app` | PWA buildée (fichiers statiques), via `pnpm` et un hash des dépendances fixé. Les tests TS tournent pendant le build. `packages.app-solo` : la variante GitHub Pages. |
+| `packages.default` | Le serveur. |
 | `packages.docker` | Image OCI construite avec `dockerTools`, sans Dockerfile. |
 | `nixosModules.default` | Module NixOS `services.lifelog` pour l'auto-hébergement (voir ci-dessous). |
-| `checks` | Tests Rust et TS, `clippy`, formatage. Lancés par `nix flake check` en CI. |
+| `checks` | Build de la PWA et du serveur, donc leurs tests. Lancés par `nix flake check` en CI (`clippy` et `rustfmt` tournent dans le job Rust de la CI). |
 
 Module NixOS, exemple d'usage :
 
@@ -417,19 +426,20 @@ services.lifelog = {
   enable = true;
   listen = "127.0.0.1:8080";               # pas d'exposition directe
   publicUrl = "https://lifelog.exemple.fr";
-  database.url = "postgres:///lifelog?host=/run/postgresql";
-  database.createLocally = true;           # crée la base et le rôle PostgreSQL
+  database.createLocally = true;           # crée la base et le rôle PostgreSQL (sinon SQLite dans /var/lib/lifelog)
 
-  registration.enabled = true;
+  registration.enable = true;
   auth.passkey.allowRegistration = false;  # passkey ajoutée depuis un compte existant
   auth.oidc = {
     pocket-id = {
+      displayName = "Pocket ID";
       issuer = "https://id.exemple.fr";
       clientId = "lifelog";
       clientSecretFile = config.sops.secrets."lifelog/pocket-id".path;
       allowRegistration = true;            # seuls les comptes de l'IdP perso s'inscrivent
     };
     google = {
+      displayName = "Google";
       issuer = "https://accounts.google.com";
       clientId = "1234.apps.googleusercontent.com";
       clientSecretFile = config.sops.secrets."lifelog/google".path;
@@ -444,9 +454,9 @@ services.caddy.virtualHosts."lifelog.exemple.fr".extraConfig = ''
 '';
 ```
 
-Toutes les options du serveur sont exposées par le module, qui génère les variables d'environnement et le fichier TOML. Les secrets passent par sops-nix (ou agenix) via les options `*File`. Le module crée un service systemd durci (`DynamicUser`, `ProtectSystem=strict`, `StateDirectory`), et avec `createLocally` configure la base dans `services.postgresql`. Le reverse proxy et le TLS restent dans la configuration de l'hôte.
+Toutes les options du serveur sont exposées par le module, qui génère les variables d'environnement et le fichier TOML. Les secrets passent par sops-nix (ou agenix) via les options `*File`. Le module crée un service systemd durci (`DynamicUser`, `ProtectSystem=strict`, `StateDirectory`, filtre d'appels système), charge les secrets OIDC par `LoadCredential`, et avec `createLocally` configure la base dans `services.postgresql` (authentification par socket Unix, sans mot de passe). Le reverse proxy et le TLS restent dans la configuration de l'hôte. Autres options : `timezone` (fuseau des webhooks sans décalage, par défaut `time.timeZone`), `extraSettings`, `environmentFile`.
 
-🟡 **Hypothèse** : `crane` pour Rust et `rust-overlay` pour la toolchain. Ce sont les choix les plus courants, faciles à changer.
+**Décidé à l'implémentation** : uniquement nixpkgs (pas de `crane` ni de `rust-overlay`). Le flake n'a qu'une entrée, le Rust de nixpkgs suffit, et `Cargo.lock` sert directement au build.
 
 ## 7. Choix techniques
 
@@ -454,14 +464,14 @@ Toutes les options du serveur sont exposées par le module, qui génère les var
 |---|---|---|---|
 | Stockage client | **SQLite WASM officiel** (`@sqlite.org/sqlite-wasm`) persisté dans **OPFS** | L'export est le fichier lui-même, sans conversion. Requêtes SQL pour les stats. Même moteur que le backend SQLite. | IndexedDB (Dexie) : il faudrait convertir vers SQLite à l'export, et pas de SQL pour les stats. |
 | Langage client | **TypeScript** | Écosystème PWA mature, typage. | Rust/WASM (Leptos) : séduisant pour partager le code avec le serveur, mais plus lourd à builder et à déboguer, et l'UI reste du DOM. |
-| Framework UI | 🟡 **Svelte 5 + Vite** | Bundle léger (bon pour le hors ligne et les mobiles modestes), réactivité simple pour un compteur qui tique chaque seconde. | React (plus lourd), Solid (écosystème plus petit). Choix réversible à ce stade. |
+| Framework UI | **Svelte 5 + Vite** | Bundle léger (bon pour le hors ligne et les mobiles modestes), réactivité simple pour un compteur qui tique chaque seconde. | React (plus lourd), Solid (écosystème plus petit). Choix réversible à ce stade. |
 | Hébergement mode solo | **GitHub Pages**, déployé par GitHub Actions | Gratuit, statique, aucun serveur à maintenir. | Netlify, Cloudflare Pages (équivalents, mais un compte de plus). |
-| i18n | 🟡 **Paraglide** (inlang) | Traductions typées et compilées, bundle minimal. FR/EN dès la v1. | svelte-i18n (chargé à l'exécution, plus lourd). |
+| i18n | **Dictionnaires TypeScript maison** | Deux langues, quelques centaines de clés : un objet typé par langue suffit. Le français est la source, une clé manquante en anglais est une erreur de compilation. Formats de dates et de nombres par `Intl`. | Paraglide (outil de plus pour un gain nul à cette taille), svelte-i18n (chargé à l'exécution). |
 | PWA | **vite-plugin-pwa** (Workbox) | Manifest et Service Worker générés, stratégie de cache standard. | Service Worker écrit à la main. |
 | Identifiants | **UUIDv7** | Uniques sans serveur, triables dans le temps. | Entiers auto-incrémentés (collisions entre appareils). |
 | Ordre des écritures | **HLC** | Robuste aux horloges décalées des téléphones. | `updated_at` en heure murale (fragile). |
 | Serveur | **Rust, axum, tokio** | Demandé. axum est le standard de fait, léger. | actix-web (équivalent, moins idiomatique avec tokio). |
-| Accès BDD serveur | **sqlx** (features `postgres`, `sqlite`) | Un seul outil pour les deux moteurs, requêtes vérifiées à la compilation, migrations intégrées. | Diesel (plus lourd), SeaORM (ORM inutile pour 2 tables). |
+| Accès BDD serveur | **sqlx** (pilote `Any`, features `postgres`, `sqlite`) | Un seul outil et les mêmes requêtes pour les deux moteurs, migrations intégrées. | Diesel (plus lourd), SeaORM (ORM inutile pour 2 tables). |
 | Auth serveur | **Passkeys (`webauthn-rs`) + OIDC générique (`openidconnect`)** | Aucun mot de passe à stocker ni à réinitialiser. OIDC générique : n'importe quel fournisseur sans code spécifique. | Login/mot de passe (refusé), intégrations Google/Facebook codées en dur. |
 | Build et déploiement | **Nix flake** (devShell, paquets, image OCI, module NixOS) | Environnement de dev reproductible, et déploiement déclaratif sur un NUC sous NixOS. Le Docker reste disponible pour les autres. | Dockerfile seul, scripts d'installation. |
 | Format d'échange | **SQLite + JSON** | SQLite = sauvegarde complète et requêtable. JSON = lisible et scriptable. | CSV (perd la structure). |
@@ -503,7 +513,7 @@ D'autres services (Garmin Connect, Google Fit / Health Connect, Apple Santé) su
 5. **Serveur Rust** : multi-utilisateur, API sync, backends PostgreSQL et SQLite, passkeys et OIDC multi-fournisseurs, jetons d'API et webhooks, paquet Nix, module NixOS et image Docker.
 6. **Sync côté PWA** : écran de configuration, cycle push/pull, indicateur d'état.
 
-Les étapes 1 à 4 donnent une application complète utilisable sans serveur.
+Les étapes 1 à 4 donnent une application complète utilisable sans serveur. **Les six étapes sont livrées (v1).**
 
 ## 10. Décisions et questions ouvertes
 
@@ -526,3 +536,20 @@ Décidé (revue du 2026-11-25) :
 Standards de données :
 
 - **Correspondance avec les standards santé.** Il n'existe pas de standard pour des « événements de vie » en général. Les plus proches couvrent la santé : **HL7 FHIR** (ressource `Observation`, codes **LOINC**, très complet mais lourd), **Open mHealth** (schémas JSON simples, ex. `blood-pressure`), et les types d'Apple Santé ou de Google Health Connect (propriétaires, mais standards de fait). **Décidé** : garder notre format, utiliser les unités UCUM dès la v1, et permettre plus tard d'associer un champ à un code LOINC (ex. systolique = `8480-6`) pour exporter en FHIR ou Open mHealth si besoin.
+
+## 11. Écarts d'implémentation (v1)
+
+Ce que le code fait différemment de la spec initiale, et pourquoi. Les sections ci-dessus sont déjà à jour.
+
+| Sujet | Spec initiale | v1 | Raison |
+|---|---|---|---|
+| Types PostgreSQL | `UUID`, `TIMESTAMPTZ`, `TEXT[]` | `TEXT` partout, une portée par jeton | Mêmes requêtes sur les deux moteurs, aucune conversion (4.4). |
+| Crates Rust | trois crates, trait `Storage` | une crate | Le pilote `Any` de sqlx rend le trait inutile (6.2). |
+| Cookie de session | `SameSite=Strict` | `SameSite=Lax` | Sinon le retour OIDC arrive sans cookie (5.5). |
+| i18n | Paraglide | dictionnaires typés | Plus simple à cette taille (7). |
+| Nix | `crane` + `rust-overlay` | nixpkgs seul | Une seule entrée de flake (6.4). |
+| État de sync client | table `sync_state` | clé `sync_state` de la table `meta`, exclue de l'export | Une table de moins, même effet. |
+| pnpm | non précisé | pnpm 11, versions publiées depuis plus d'un jour seulement (`minimumReleaseAge`) | Protection contre les paquets npm compromis juste après publication. |
+
+Reste pour après la v1 : section 3.2 et section 8 (imports GPX/FIT/CSV, Strava), cache de sessions Redis, codes LOINC.
+
