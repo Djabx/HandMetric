@@ -2,7 +2,7 @@
 
 *Statut : brouillon, 2026-11-25.*
 
-Les points marqués **🟡 Hypothèse** sont des choix faits par défaut, sans validation. Ils sont à confirmer ou à changer. La liste complète est reprise en [section 9](#9-questions-ouvertes).
+Les points marqués **🟡 Hypothèse** sont des choix faits par défaut, sans validation. Ils sont à confirmer ou à changer. La liste complète est reprise en [section 10](#10-questions-ouvertes).
 
 ---
 
@@ -69,7 +69,7 @@ Contraintes fondatrices :
 - Fonctionnement 100 % hors ligne après la première visite. Installable sur l'écran d'accueil.
 
 **Synchronisation (si un serveur est configuré)**
-- Saisir l'URL du serveur et un jeton d'accès.
+- Saisir l'URL du serveur et se connecter par passkey ou SSO (voir 5.5).
 - Synchronisation automatique au démarrage, au retour en ligne, et après chaque modification (avec un délai de regroupement).
 
 ### 3.2 Plus tard (hors v1)
@@ -81,6 +81,7 @@ Contraintes fondatrices :
 - Étiquettes / catégories de compteurs.
 - Multi-utilisateur sur un même serveur.
 - Import depuis d'autres applis (CSV générique).
+- Intégrations tierces : Strava, fichiers GPX/FIT (voir [section 8](#8-intégrations-futures)).
 
 ### 3.3 Hors périmètre
 
@@ -222,7 +223,7 @@ Propriétés : **idempotent** (importer deux fois le même fichier ne change rie
 
 ### 5.4 Protocole de synchronisation
 
-API HTTP JSON, versionnée sous `/api/v1`. Authentification par jeton porteur (`Authorization: Bearer …`).
+API HTTP JSON, versionnée sous `/api/v1`. Authentification décrite en 5.5.
 
 | Méthode | Route | Rôle |
 |---|---|---|
@@ -238,7 +239,41 @@ Cycle client :
 
 Le serveur n'a aucune logique métier (pas de calcul de succès). Il stocke, fusionne et redistribue.
 
-🟡 **Hypothèse** : le jeton est créé en ligne de commande sur le serveur (`lifelog-server token create`), puis collé dans la PWA. Pas d'écran de connexion ni de mot de passe en v1.
+### 5.5 Authentification (mode serveur)
+
+**Pas d'identifiant ni de mot de passe.** Le mode hors ligne n'a aucune authentification. En mode serveur, deux méthodes, au choix de celui qui héberge :
+
+1. **Passkeys (WebAuthn)**, méthode par défaut. Rien à configurer côté hébergeur. Le serveur stocke uniquement des clés publiques. Bibliothèque Rust : `webauthn-rs`.
+2. **SSO via OpenID Connect générique.** Le serveur ne connaît pas « Google » ou « GitHub » en dur : il accepte n'importe quel fournisseur OIDC décrit dans sa configuration (URL de l'émetteur, `client_id`, `client_secret`). Bibliothèque Rust : `openidconnect`.
+
+```toml
+# lifelog.toml (exemple)
+[auth.passkey]
+enabled = true
+
+[[auth.oidc]]
+name          = "Google"
+issuer        = "https://accounts.google.com"
+client_id     = "…"
+client_secret = "…"
+```
+
+Fournisseurs possibles :
+
+| Fournisseur | Effort pour l'hébergeur |
+|---|---|
+| **Google** | Créer un « client OAuth » dans Google Cloud Console (gratuit, environ 10 min) et y déclarer l'URL de retour `https://<serveur>/auth/oidc/callback`. Pas de validation Google nécessaire tant qu'on ne demande que `openid email profile`. |
+| **GitHub, Microsoft, GitLab** | Même principe : enregistrer une application, copier les identifiants. |
+| **Facebook** | Déconseillé : OIDC partiel, validation d'app et contraintes de confidentialité lourdes pour un usage perso. |
+| **IdP auto-hébergé** (Pocket ID, Authelia, Authentik, Keycloak) | Idéal sur un NUC : un seul compte pour tous ses services. Pocket ID fait du passkey uniquement. |
+
+Fonctionnement :
+- Le premier compte qui se connecte devient le propriétaire du serveur. Les inscriptions sont ensuite fermées, sauf invitation (🟡 **Hypothèse**).
+- Après connexion, le serveur ouvre une session (cookie `HttpOnly`, `Secure`, `SameSite=Strict` si la PWA est servie par le serveur, sinon un jeton de session stocké par la PWA).
+- Plusieurs passkeys et identités OIDC peuvent être liées au même compte (téléphone, ordinateur, Google…).
+- Un **jeton d'API** peut être créé depuis l'interface pour des scripts (export automatisé, sauvegarde).
+
+🟡 **Hypothèse** : la PWA est servie par le serveur lui-même quand on l'utilise en mode serveur (même origine), ce qui simplifie cookies et passkeys. Une PWA hébergée ailleurs (ex. GitHub Pages) qui parle à un serveur perso reste possible, avec CORS et jeton de session.
 
 ## 6. Architecture
 
@@ -266,7 +301,7 @@ server/
   crates/
     lifelog-core/     types, HLC, règle de fusion, migrations de format d'export
     lifelog-storage/  trait Storage + impl. postgres et sqlite (features Cargo)
-    lifelog-server/   binaire axum : API, auth, CLI d'admin
+    lifelog-server/   binaire axum : API, auth (passkeys, OIDC), CLI d'admin
 ```
 
 ```rust
@@ -302,6 +337,7 @@ Le code ne doit pas en dépendre : derrière un trait, désactivé par défaut.
 | Ordre des écritures | **HLC** | Robuste aux horloges décalées des téléphones. | `updated_at` en heure murale (fragile). |
 | Serveur | **Rust, axum, tokio** | Demandé. axum est le standard de fait, léger. | actix-web (équivalent, moins idiomatique avec tokio). |
 | Accès BDD serveur | **sqlx** (features `postgres`, `sqlite`) | Un seul outil pour les deux moteurs, requêtes vérifiées à la compilation, migrations intégrées. | Diesel (plus lourd), SeaORM (ORM inutile pour 2 tables). |
+| Auth serveur | **Passkeys (`webauthn-rs`) + OIDC générique (`openidconnect`)** | Aucun mot de passe à stocker ni à réinitialiser. OIDC générique : n'importe quel fournisseur sans code spécifique. | Login/mot de passe (refusé), intégrations Google/Facebook codées en dur. |
 | Format d'échange | **SQLite + JSON** | SQLite = sauvegarde complète et requêtable. JSON = lisible et scriptable. | CSV (perd la structure). |
 
 ### Compatibilité navigateurs
@@ -310,25 +346,44 @@ OPFS avec accès synchrone est disponible dans Chrome/Edge 108+, Firefox 111+ et
 
 **Point d'attention iOS** : Safari peut purger les données d'un site non installé après 7 jours sans visite. Il faut inciter à « Ajouter à l'écran d'accueil » et rappeler l'export ou la sync dans l'interface.
 
-## 8. Plan de livraison
+## 8. Intégrations futures
+
+Hors v1. Deux familles, selon qu'elles exigent un serveur ou non.
+
+### 8.1 Import de fichiers (sans serveur)
+
+Les montres et applis de sport exportent des fichiers **GPX**, **FIT** ou **TCX**. La PWA peut les lire localement : glisser un fichier (ou le partager vers la PWA via Share Target sur Android), et chaque activité devient un événement avec date, durée et distance en valeur. Aucun compte tiers, fonctionne hors ligne.
+
+### 8.2 Strava (serveur requis)
+
+Strava fournit une API OAuth 2. Une intégration directe exige :
+- **un serveur**, car le `client_secret` Strava ne peut pas vivre dans une PWA, et le serveur doit garder les jetons de rafraîchissement ;
+- **que chaque hébergeur crée sa propre application Strava** (gratuit, sur strava.com/settings/api). Une nouvelle app est limitée à un seul athlète tant que Strava ne l'a pas validée, ce qui suffit pour un usage perso ;
+- idéalement une **URL publique** pour recevoir les webhooks de Strava (nouvelle activité). Sinon, le serveur interroge l'API périodiquement (limites : 100 requêtes / 15 min, 1 000 / jour).
+
+Principe : on associe un compteur LifeLog à un type d'activité Strava (ex. « Course » → `Run`). Chaque nouvelle activité crée un événement, avec un identifiant dérivé de l'ID Strava pour que la réimportation ne crée pas de doublon. Les événements arrivent ensuite sur les appareils par la sync normale.
+
+D'autres services (Garmin Connect, Google Fit / Health Connect, Apple Santé) suivraient le même modèle de « connecteur » côté serveur. Apple Santé et Health Connect ne sont accessibles qu'à une appli native, pas à une PWA.
+
+## 9. Plan de livraison
 
 1. **Squelette** : monorepo, PWA Vite + Svelte installable, SQLite WASM dans un worker, migrations.
 2. **Cœur hors ligne** : compteurs, événements, tableau de bord, durées.
 3. **Stats et succès** : séries, records, paliers, heatmap.
 4. **Export / import** SQLite et JSON, avec tests de fusion (idempotence, commutativité).
-5. **Serveur Rust** : API sync, backends PostgreSQL et SQLite, CLI de jetons, image Docker.
+5. **Serveur Rust** : API sync, backends PostgreSQL et SQLite, passkeys puis OIDC, image Docker.
 6. **Sync côté PWA** : écran de configuration, cycle push/pull, indicateur d'état.
 
 Les étapes 1 à 4 donnent une application complète utilisable sans serveur.
 
-## 9. Questions ouvertes
+## 10. Questions ouvertes
 
 Hypothèses à valider (récapitulatif) :
 
 1. Un serveur = un utilisateur en v1 ?
 2. Pas de table de succès : tout est calculé ?
 3. Last-writer-wins par ligne (pas de CRDT) ?
-4. Jeton créé en CLI, pas d'écran de connexion ?
+4. Premier compte connecté = propriétaire, inscriptions fermées ensuite ?
 5. Redis absent en v1 ?
 6. Svelte comme framework UI ?
 7. Pas de support des navigateurs sans OPFS ?
