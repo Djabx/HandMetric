@@ -10,7 +10,7 @@ use anyhow::Result;
 use axum::http::HeaderMap;
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::Engine;
-use rand::RngCore;
+use rand::TryRng;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::Row;
@@ -24,7 +24,9 @@ const SESSION_DAYS: i64 = 90;
 /// 256 bits aléatoires, encodés en base64url.
 pub fn random_token(prefix: &str) -> String {
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rngs::SysRng
+        .try_fill_bytes(&mut bytes)
+        .expect("générateur aléatoire du système indisponible");
     format!(
         "{prefix}{}",
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)

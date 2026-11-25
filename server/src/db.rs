@@ -304,9 +304,9 @@ impl Db {
                 };
                 let id = row["id"].as_str().unwrap_or_default();
                 let updated_at = row["updated_at"].as_str().unwrap_or_default();
-                let current: Option<String> = sqlx::query(&format!(
+                let current: Option<String> = sqlx::query(sqlx::AssertSqlSafe(format!(
                     "SELECT updated_at FROM {table} WHERE user_id = $1 AND id = $2"
-                ))
+                )))
                 .bind(user_id)
                 .bind(id)
                 .fetch_optional(&mut *tx)
@@ -322,7 +322,7 @@ impl Db {
                 .fetch_one(&mut *tx)
                 .await?
                 .get::<i64, _>("value");
-                let mut q = sqlx::query(&sql).bind(user_id);
+                let mut q = sqlx::query(sqlx::AssertSqlSafe(sql.as_str())).bind(user_id);
                 for (col, ty) in cols {
                     let v = &row[*col];
                     q = match ty {
@@ -353,9 +353,9 @@ impl Db {
         let mut all: Vec<(i64, &str, Row)> = Vec::new();
         let mut truncated = false;
         for table in TABLES {
-            let rows = sqlx::query(&format!(
+            let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
                 "SELECT * FROM {table} WHERE user_id = $1 AND server_seq > $2 ORDER BY server_seq LIMIT $3"
-            ))
+            )))
             .bind(user_id)
             .bind(cursor)
             .bind(limit + 1)
@@ -384,9 +384,9 @@ impl Db {
     pub async fn snapshot(&self, user_id: &str) -> Result<ChangeSet> {
         let mut out = ChangeSet::default();
         for table in TABLES {
-            let rows = sqlx::query(&format!(
+            let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
                 "SELECT * FROM {table} WHERE user_id = $1 ORDER BY server_seq"
-            ))
+            )))
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
