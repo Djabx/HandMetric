@@ -1,34 +1,153 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":semanticCommits", ":dependencyDashboard"],
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
   "timezone": "Europe/Paris",
-  "schedule": ["before 6am on monday"],
-  "minimumReleaseAge": "1 day",
-  "labels": ["dependencies"],
+  "schedule": [
+    "before 6am on monday"
+  ],
+  "description": "Plus long que le minimumReleaseAge de pnpm (1 jour) : sinon le lockfile ne peut pas être régénéré (dépendances transitives publiées en même temps).",
+  "minimumReleaseAge": "3 days",
+  "internalChecksFilter": "strict",
+  "labels": [
+    "dependencies"
+  ],
   "rangeStrategy": "bump",
-  "nix": { "enabled": true },
-  "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on monday"] },
+  "ignorePaths": [
+    "**/node_modules/**",
+    "docs/**"
+  ],
+  "gitIgnoredAuthors": [
+    "41898282+github-actions[bot]@users.noreply.github.com"
+  ],
+  "nix": {
+    "enabled": true
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ],
+    "automerge": true
+  },
+  "automergeType": "pr",
+  "automergeStrategy": "rebase",
   "packageRules": [
     {
+      "description": "Mineures et correctifs : fusion automatique si la CI est verte (rebase sur main avant). Les majeures restent en relecture.",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
       "description": "Mises à jour mineures et correctifs npm groupés",
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupName": "dépendances npm (mineures)"
     },
     {
-      "description": "Mises à jour mineures et correctifs Cargo groupés",
-      "matchManagers": ["cargo"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "description": "Cargo : on garde les plages (\"1\", \"0.8\") dans Cargo.toml et on ne met à jour que Cargo.lock",
+      "matchManagers": [
+        "cargo"
+      ],
+      "rangeStrategy": "update-lockfile"
+    },
+    {
+      "description": "Cargo : mineures et correctifs compatibles groupés (>= 1.0)",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchCurrentVersion": ">=1.0.0",
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupName": "dépendances Cargo (mineures)"
     },
     {
+      "description": "Cargo : correctifs des crates 0.x groupés aussi",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchCurrentVersion": "<1.0.0",
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "groupName": "dépendances Cargo (mineures)"
+    },
+    {
+      "description": "Cargo : en 0.x une mineure (0.12 → 0.13) est cassante : PR séparée, relue à la main",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchCurrentVersion": "<1.0.0",
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "automerge": false,
+      "labels": [
+        "dependencies",
+        "breaking"
+      ]
+    },
+    {
       "description": "Actions GitHub groupées",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "actions GitHub"
     },
     {
+      "description": "Node.js et pnpm de la CI suivent ceux de Nix (nodejs_24, pnpm 11) : on garde l'écriture courte (\"24\", \"11\")",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "node",
+        "pnpm"
+      ],
+      "rangeStrategy": "replace"
+    },
+    {
+      "description": "… et on ne change pas de majeure sans changer Nix en même temps",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "node",
+        "pnpm"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "PostgreSQL épinglé sur la 16",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "postgres"
+      ],
+      "allowedVersions": "16"
+    },
+    {
       "description": "svelte-check 4 ne prend pas encore en charge TypeScript 7",
-      "matchPackageNames": ["typescript"],
+      "matchPackageNames": [
+        "typescript"
+      ],
       "allowedVersions": "<7"
     }
   ]
