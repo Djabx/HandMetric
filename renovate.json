@@ -27,9 +27,9 @@
       "groupName": "actions GitHub"
     },
     {
-      "description": "svelte-check ne prend pas encore en charge TypeScript 6+",
+      "description": "svelte-check 4 ne prend pas encore en charge TypeScript 7",
       "matchPackageNames": ["typescript"],
-      "allowedVersions": "<6"
+      "allowedVersions": "<7"
     }
   ]
 }
