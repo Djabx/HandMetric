@@ -3,7 +3,8 @@ export type Route =
   | { name: 'tracker'; id: string }
   | { name: 'edit'; id: string }
   | { name: 'new'; template?: string }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'about' };
 
 function parse(hash: string): Route {
   const path = hash.replace(/^#\/?/, '').split('?')[0];
@@ -12,6 +13,7 @@ function parse(hash: string): Route {
   if (a === 't' && b) return { name: 'tracker', id: b };
   if (a === 'new') return { name: 'new', template: b };
   if (a === 'settings') return { name: 'settings' };
+  if (a === 'about') return { name: 'about' };
   return { name: 'dashboard' };
 }
 

@@ -85,6 +85,7 @@
     <section class="empty">
       <h2>{t('dash.empty.title')}</h2>
       <p class="muted">{t('dash.empty.body')}</p>
+      <p><a href="#/about">{t('about.more')}</a></p>
       <div class="templates">
         {#each TEMPLATES as tpl (tpl.id)}
           <button class="btn" onclick={() => go(`new/${tpl.id}`)}>{tpl.icon} {t(tpl.name)}</button>
