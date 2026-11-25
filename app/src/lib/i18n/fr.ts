@@ -40,6 +40,9 @@ export const fr = {
   'form.templates': 'Exemples',
   'form.templatesHelp': 'Facultatif : un exemple pré-remplit le formulaire, que tu peux ensuite modifier. Sinon, remplis-le directement.',
   'form.templateBlank': 'Vierge',
+  'form.iconHelp': 'Tape un emoji avec ton clavier (sur mobile : le clavier emoji), ou parcours la liste complète avec recherche.',
+  'form.iconChoose': 'Choisir…',
+  'form.iconClose': 'Fermer',
 
   'form.newTitle': 'Nouveau compteur',
   'form.editTitle': 'Modifier le compteur',

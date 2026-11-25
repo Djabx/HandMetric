@@ -11,6 +11,12 @@ importers:
       '@sqlite.org/sqlite-wasm':
         specifier: 3.54.1-build1
         version: 3.54.1-build1
+      emoji-picker-element:
+        specifier: 1.29.1
+        version: 1.29.1
+      emoji-picker-element-data:
+        specifier: 1.8.0
+        version: 1.8.0
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: 7.3.2
@@ -1128,6 +1134,12 @@ packages:
 
   electron-to-chromium@1.5.493:
     resolution: {integrity: sha512-/Wto2sKd0EpepzMqwSP2il2TNc+rnBDF6k1poCvhRKpaSSD4sLGRBE+FydqHs2QwcW9cXKLVDqnauzJy1oByYw==}
+
+  emoji-picker-element-data@1.8.0:
+    resolution: {integrity: sha512-VfRuRJNEDLS1JKlNS4olaqhjX5S1nnZ+ZHG73b/dV8QeZyi0yPruTPEE72EmF6XO3k/9hj3lybMIYMOYXb/57A==}
+
+  emoji-picker-element@1.29.1:
+    resolution: {integrity: sha512-TOiHzu9Dqib3x4MwcAi3wi3RdyT4SoeB4b15AvH1ks4SBwTl7DeebhZ0d3x6dNi4XfNU7IGRZ7NBQllj0RqwrQ==}
 
   es-abstract-get@1.0.0:
     resolution: {integrity: sha512-6PMWXpdhshVvFp+FoWYs1EvG1Nj0tvk0dZM+XcK0xMEM1czRVcP6ohqPWHy6qPagSpC8j4+p89WXlT+xXJs/fg==}
@@ -3236,6 +3248,10 @@ snapshots:
       jake: 10.9.4
 
   electron-to-chromium@1.5.493: {}
+
+  emoji-picker-element-data@1.8.0: {}
+
+  emoji-picker-element@1.29.1: {}
 
   es-abstract-get@1.0.0:
     dependencies:

@@ -11,7 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sqlite.org/sqlite-wasm": "3.54.1-build1"
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1",
+    "emoji-picker-element": "1.29.1",
+    "emoji-picker-element-data": "1.8.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "7.3.2",
