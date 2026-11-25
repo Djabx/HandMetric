@@ -7,6 +7,7 @@ export const fr = {
   'common.delete': 'Supprimer',
   'common.edit': 'Modifier',
   'common.close': 'Fermer',
+  'event.measureRequired': 'Saisis un nombre, par exemple 12 ou 12,5',
   'event.deleted': 'Événement mis à la corbeille',
   'common.undo': 'Annuler',
   'common.none': 'Aucun',

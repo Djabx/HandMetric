@@ -9,6 +9,7 @@ export const en: Record<Key, string> = {
   'common.delete': 'Delete',
   'common.edit': 'Edit',
   'common.close': 'Close',
+  'event.measureRequired': 'Enter a number, for example 12 or 12.5',
   'event.deleted': 'Event moved to the trash',
   'common.undo': 'Undo',
   'common.none': 'None',

@@ -13,6 +13,9 @@
     onclose,
   }: { tracker: Tracker; fields: TrackerField[]; event?: LifeEvent | null; onclose: () => void } = $props();
 
+  /** Une mesure est obligatoire et doit être un nombre (virgule ou point). */
+  const NUMBER = '\\s*-?\\d+([.,]\\d+)?\\s*';
+
   let dialog: HTMLDialogElement;
 
   // svelte-ignore state_referenced_locally
@@ -31,16 +34,17 @@
 
   async function save(e: SubmitEvent) {
     e.preventDefault();
+    const measures: Record<string, number> = {};
+    for (const f of fields) {
+      const n = Number(values[f.id]?.replace(',', '.').trim() || NaN);
+      if (!Number.isFinite(n)) {
+        toast(t('event.measureRequired'));
+        return;
+      }
+      measures[f.id] = n;
+    }
     busy = true;
     try {
-      const measures: Record<string, number> = {};
-      for (const f of fields) {
-        const v = values[f.id]?.replace(',', '.').trim();
-        if (v) {
-          const n = Number(v);
-          if (Number.isFinite(n)) measures[f.id] = n;
-        }
-      }
       const date = new Date(when);
       await db.write('saveEvent', {
         id: event?.id,
@@ -87,7 +91,7 @@
     {#each fields as f (f.id)}
       <label class="field">
         <span>{f.name}{f.unit ? ` (${unitLabel(f.unit)})` : ''}</span>
-        <input type="text" inputmode="decimal" bind:value={values[f.id]} autocomplete="off" />
+        <input type="text" inputmode="decimal" bind:value={values[f.id]} autocomplete="off" required pattern={NUMBER} title={t('event.measureRequired')} />
       </label>
     {/each}
     <label class="field">
