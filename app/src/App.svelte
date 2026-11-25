@@ -10,8 +10,9 @@
   import Toasts from './ui/components/Toasts.svelte';
   import { startSync } from './lib/sync/client';
 
-  onAchievement((tr, a) => {
-    toast(`${t('ach.unlocked')} ${tr.icon ?? ''} ${tr.name} : ${achievementLabel(a)}`, { icon: '🏆' }, 6000);
+  onAchievement((tr, a, others) => {
+    const more = others > 0 ? ` ${t('ach.andMore', { n: others })}` : '';
+    toast(`${t('ach.unlocked')} ${tr.icon ?? ''} ${tr.name} : ${achievementLabel(a)}${more}`, { icon: '🏆' }, 6000);
   });
 
   $effect(() => {

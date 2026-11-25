@@ -4,6 +4,7 @@
   import { unitLabel } from '../../lib/templates';
   import type { LifeEvent, Tracker, TrackerField } from '../../lib/types';
   import { toast } from '../../lib/state.svelte';
+  import DateTimeInput from './DateTimeInput.svelte';
 
   let {
     tracker,
@@ -14,14 +15,8 @@
 
   let dialog: HTMLDialogElement;
 
-  /** Valeur pour <input type="datetime-local"> en heure locale. */
-  function toLocalInput(d: Date): string {
-    const off = d.getTimezoneOffset() * 60_000;
-    return new Date(d.getTime() - off).toISOString().slice(0, 16);
-  }
-
   // svelte-ignore state_referenced_locally
-  let when = $state(toLocalInput(event ? new Date(event.occurred_at) : new Date()));
+  let when = $state(event ? Date.parse(event.occurred_at) : Date.now());
   // svelte-ignore state_referenced_locally
   let note = $state(event?.note ?? '');
   // svelte-ignore state_referenced_locally
@@ -80,13 +75,13 @@
     <h2 id="event-title" style="margin-top:0">
       {tracker.icon ?? ''} {event ? t('event.title') : t('event.newTitle')} · {tracker.name}
     </h2>
-    <label class="field">
+    <div class="field">
       <span>{t('event.when')}</span>
       <div class="row">
-        <input class="grow" type="datetime-local" bind:value={when} required style="width:auto" />
-        <button type="button" class="btn small" onclick={() => (when = toLocalInput(new Date()))}>{t('event.now')}</button>
+        <DateTimeInput bind:value={when} label={t('event.when')} />
+        <button type="button" class="btn small" onclick={() => (when = Date.now())}>{t('event.now')}</button>
       </div>
-    </label>
+    </div>
     {#each fields as f (f.id)}
       <label class="field">
         <span>{f.name}{f.unit ? ` (${unitLabel(f.unit)})` : ''}</span>

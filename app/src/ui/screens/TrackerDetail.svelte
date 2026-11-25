@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app, clock, viewOf } from '../../lib/state.svelte';
-  import { fmtDate, fmtDateTime, fmtNumber, humanDuration, locale, preciseDuration, t } from '../../lib/i18n/index.svelte';
+  import { fmtDate, fmtDateTime, fmtNumber, humanDuration, locale, sinceLabel, t } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
   import { fieldSummaries, heatmap, periodSeries } from '../../lib/domain/stats';
   import { localOffset } from '../../lib/db/store';
@@ -86,7 +86,7 @@
     <section class="hero card">
       {#if tracker.display_mode === 'abstinence'}
         <div class="big">{humanDuration(view.stats.currentGapFrom, clock.now)}</div>
-        <div class="muted mono">{preciseDuration(view.stats.currentGapFrom, clock.now)}</div>
+        <div class="muted">{sinceLabel(view.stats.currentGapFrom, clock.now)}</div>
       {:else}
         <div class="big">{t('dash.today', { n: view.stats.today })}</div>
         <div class="muted">{t('dash.week', { n: view.stats.thisWeek })}</div>
@@ -201,7 +201,6 @@
   .h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
   .hero { display: grid; gap: 4px; border-left: 6px solid var(--c); }
   .big { font-size: 2rem; font-weight: 800; line-height: 1.15; }
-  .mono { font-variant-numeric: tabular-nums; }
   .log { justify-self: start; margin-top: 8px; min-width: 120px; font-size: 1.1rem; }
   .ev { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 0; border: 0; background: none; cursor: pointer; }
 </style>

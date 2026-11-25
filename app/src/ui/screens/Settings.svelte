@@ -100,7 +100,7 @@
     <h2>{t('settings.about')}</h2>
     <p class="small muted">
       {t('app.tagline')}<br />
-      {t('settings.version', { v: APP_VERSION })} · <a href="https://github.com/Djabx/HandMetric" target="_blank" rel="noopener">{t('settings.source')}</a> · MIT
+      {t('settings.version', { v: APP_VERSION })} · <a href="https://github.com/Djabx/lifelog" target="_blank" rel="noopener">{t('settings.source')}</a> · MIT
     </p>
   </section>
 </div>
