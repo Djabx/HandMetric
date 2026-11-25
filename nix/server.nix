@@ -25,6 +25,10 @@ rustPlatform.buildRustPackage {
 
   cargoLock.lockFile = ../server/Cargo.lock;
 
+  # Les tests (SQLite et PostgreSQL) tournent dans la CI GitHub (job server) ;
+  # les relancer ici recompilerait tout le projet une seconde fois.
+  doCheck = false;
+
   nativeBuildInputs = [
     pkg-config
     makeWrapper
