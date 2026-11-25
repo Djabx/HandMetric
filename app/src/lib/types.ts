@@ -57,6 +57,8 @@ export interface MergeSummary {
   inserted: number;
   updated: number;
   ignored: number;
+  /** Compteurs présents dans le fichier mais supprimés ici depuis : ils restent dans la corbeille. */
+  stillDeleted: number;
   byTable: Record<string, { inserted: number; updated: number; ignored: number }>;
 }
 

@@ -24,6 +24,8 @@ export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean) {
     saveTracker: (input: TrackerInput, fields: FieldInput[]) => store.saveTracker(input, fields),
     setArchived: (id: string, archived: boolean) => store.setArchived(id, archived),
     deleteTracker: (id: string) => store.deleteTracker(id),
+    listDeletedTrackers: () => store.listDeletedTrackers(),
+    restoreTracker: (id: string) => store.restoreTracker(id),
     reorderTrackers: (ids: string[]) => store.reorderTrackers(ids),
     listEvents: (trackerId: string, limit?: number) => store.listEvents(trackerId, { limit }),
     listAllEvents: () => store.listAllEvents(),

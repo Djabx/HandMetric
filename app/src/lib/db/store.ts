@@ -232,6 +232,33 @@ export class Store {
     return e;
   }
 
+  /** Corbeille : compteurs supprimés, du plus récent au plus ancien. */
+  listDeletedTrackers(): (Tracker & { event_count: number })[] {
+    return this.sql.all<Tracker & { event_count: number }>(
+      `SELECT t.*, (SELECT COUNT(*) FROM event e WHERE e.tracker_id = t.id AND e.deleted_at = t.deleted_at) AS event_count
+       FROM tracker t WHERE t.deleted_at IS NOT NULL ORDER BY t.deleted_at DESC`,
+    );
+  }
+
+  /**
+   * Restaure un compteur supprimé, avec les champs et événements supprimés en même temps
+   * (même deleted_at). Les événements supprimés un par un avant restent supprimés.
+   * Les lignes reçoivent une nouvelle estampille : la restauration gagne la fusion et se synchronise.
+   */
+  restoreTracker(id: string): void {
+    const [t] = this.sql.all<Row>('SELECT * FROM tracker WHERE id = ? AND deleted_at IS NOT NULL', [id]);
+    if (!t) return;
+    const at = t.deleted_at;
+    this.tx(() => {
+      this.upsert('tracker', { ...t, deleted_at: null, updated_at: this.hlc.now(), device_id: this.deviceId });
+      for (const table of ['tracker_field', 'event'] as const) {
+        for (const r of this.sql.all<Row>(`SELECT * FROM ${table} WHERE tracker_id = ? AND deleted_at = ?`, [id, at])) {
+          this.upsert(table, { ...r, deleted_at: null, updated_at: this.hlc.now(), device_id: this.deviceId });
+        }
+      }
+    });
+  }
+
   deleteEvent(id: string): void {
     const [r] = this.sql.all<Row>('SELECT * FROM event WHERE id = ? AND deleted_at IS NULL', [id]);
     if (!r) return;
@@ -265,7 +292,7 @@ export class Store {
    * Idempotent et commutatif.
    */
   merge(changes: Partial<ChangeSet>): MergeSummary {
-    const summary: MergeSummary = { inserted: 0, updated: 0, ignored: 0, byTable: {} };
+    const summary: MergeSummary = { inserted: 0, updated: 0, ignored: 0, stillDeleted: 0, byTable: {} };
     this.tx(() => {
       for (const t of SYNC_TABLES) {
         const s = { inserted: 0, updated: 0, ignored: 0 };
@@ -275,9 +302,13 @@ export class Store {
             s.ignored++;
             continue;
           }
-          const [cur] = this.sql.all<{ updated_at: string }>(`SELECT updated_at FROM ${t} WHERE id = ?`, [row.id]);
+          const [cur] = this.sql.all<{ updated_at: string; deleted_at: string | null }>(
+            `SELECT updated_at, deleted_at FROM ${t} WHERE id = ?`,
+            [row.id],
+          );
           if (cur && cur.updated_at >= String(row.updated_at)) {
             s.ignored++;
+            if (t === 'tracker' && cur.deleted_at && !row.deleted_at) summary.stillDeleted++;
             continue;
           }
           try {
