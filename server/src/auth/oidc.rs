@@ -6,10 +6,12 @@ use crate::AppState;
 use axum::extract::{Path, Query, State};
 use axum::response::Redirect;
 use axum_extra::extract::CookieJar;
-use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreProviderMetadata};
+use openidconnect::core::{
+    CoreAuthenticationFlow, CoreClient, CoreProviderMetadata, CoreUserInfoClaims,
+};
 use openidconnect::{
-    AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, PkceCodeChallenge,
-    PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
+    AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse,
+    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -174,15 +176,43 @@ async fn finish(state: &AppState, q: &Callback) -> Result<Option<String>, AppErr
         .claims(&client.id_token_verifier(), &pending.nonce)
         .map_err(|e| AppError::BadRequest(format!("jeton d'identité invalide : {e}")))?;
     let subject = claims.subject().to_string();
-    let email = claims.email().map(|e| e.to_string());
-    let name = claims
+    let mut email = claims.email().map(|e| e.to_string());
+    let mut name = claims
         .name()
         .and_then(|n| n.get(None))
         .map(|n| n.to_string())
-        .or(email.clone());
+        .or_else(|| claims.preferred_username().map(|u| u.to_string()));
+    // Certains fournisseurs (Authelia par défaut) ne mettent le nom et l'e-mail que dans
+    // la réponse userinfo, pas dans le jeton d'identité.
+    if name.is_none() || email.is_none() {
+        match client.user_info(token.access_token().clone(), Some(claims.subject().clone())) {
+            Ok(req) => match async {
+                let http = http();
+                let info: Result<CoreUserInfoClaims, _> = req.request_async(&http).await;
+                info
+            }
+            .await
+            {
+                Ok(info) => {
+                    email = email.or_else(|| info.email().map(|e| e.to_string()));
+                    name = name
+                        .or_else(|| info.name().and_then(|n| n.get(None)).map(|n| n.to_string()))
+                        .or_else(|| info.preferred_username().map(|u| u.to_string()));
+                }
+                Err(e) => tracing::warn!("userinfo OIDC : {e}"),
+            },
+            Err(e) => tracing::debug!("pas de userinfo OIDC : {e}"),
+        }
+    }
+    let name = name.or(email.clone());
     let provider = pending.provider;
 
     if let Some((uid, _)) = state.db.find_identity(&provider, &subject).await? {
+        // Complète le profil des comptes créés avant que le nom soit connu.
+        state
+            .db
+            .fill_profile(&uid, &provider, &subject, name.as_deref(), email.as_deref())
+            .await?;
         return Ok(Some(uid));
     }
     if let Some(uid) = pending.link_user {
