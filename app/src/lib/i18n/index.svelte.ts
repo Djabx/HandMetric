@@ -52,7 +52,7 @@ export function fmtRelative(ms: number, now = Date.now()): string {
   const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });
   const diff = (ms - now) / 1000;
   const abs = Math.abs(diff);
-  if (abs < 60) return rtf.format(Math.round(diff), 'second');
+  if (abs < 60) return t('time.justNow');
   if (abs < 3600) return rtf.format(Math.round(diff / 60), 'minute');
   if (abs < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
   return rtf.format(Math.round(diff / 86400), 'day');
@@ -63,29 +63,31 @@ function unit(n: number, one: Key, many: Key) {
 }
 
 /**
- * Durée humaine : les deux plus grandes unités non nulles.
- * Ex. « 6 mois et 2 jours », « 3 semaines et 2 jours », « 4 heures et 12 minutes ».
+ * Durée à l'échelle humaine : jamais de secondes. L'unité principale dépend de
+ * l'ancienneté, complétée par l'unité juste en dessous si elle n'est pas nulle.
+ * Ex. « 20 ans », « 6 mois et 2 semaines », « 3 jours et 4 heures », « 12 minutes ».
  */
 export function humanDuration(from: number, to: number): string {
   const b = breakdown(from, to);
-  const parts: string[] = [];
-  if (b.years) parts.push(unit(b.years, 'dur.year', 'dur.years'));
-  if (b.months) parts.push(unit(b.months, 'dur.month', 'dur.months'));
-  if (b.weeks) parts.push(unit(b.weeks, 'dur.week', 'dur.weeks'));
-  if (b.days) parts.push(unit(b.days, 'dur.day', 'dur.days'));
-  if (b.hours) parts.push(unit(b.hours, 'dur.hour', 'dur.hours'));
-  if (b.minutes) parts.push(unit(b.minutes, 'dur.minute', 'dur.minutes'));
-  if (!parts.length) return t('dur.lessThanMinute');
-  const top = parts.slice(0, 2);
-  return top.length === 2 ? `${top[0]} ${t('dur.and')} ${top[1]}` : top[0];
+  const units: [number, Key, Key][] = [
+    [b.years, 'dur.year', 'dur.years'],
+    [b.months, 'dur.month', 'dur.months'],
+    [b.weeks, 'dur.week', 'dur.weeks'],
+    [b.days, 'dur.day', 'dur.days'],
+    [b.hours, 'dur.hour', 'dur.hours'],
+    [b.minutes, 'dur.minute', 'dur.minutes'],
+  ];
+  const i = units.findIndex(([n]) => n > 0);
+  if (i < 0) return t('dur.lessThanMinute');
+  const top = unit(...units[i]);
+  const next = units[i + 1];
+  return next && next[0] > 0 ? `${top} ${t('dur.and')} ${unit(...next)}` : top;
 }
 
-/** Compteur précis : « 182 j 04:12:05 ». */
-export function preciseDuration(from: number, to: number): string {
-  const s = Math.max(0, Math.floor((to - from) / 1000));
-  const d = Math.floor(s / 86400);
-  const hh = String(Math.floor((s % 86400) / 3600)).padStart(2, '0');
-  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
-  const ss = String(s % 60).padStart(2, '0');
-  return `${d ? `${d} ${t('dur.short.d')} ` : ''}${hh}:${mm}:${ss}`;
+/** Point de départ d'une durée : « depuis le 12 mars 2006 », ou « depuis 14:05 » le jour même. */
+export function sinceLabel(from: number, now: number): string {
+  if (now - from < 86_400_000 && new Date(from).toDateString() === new Date(now).toDateString()) {
+    return t('dur.sinceTime', { time: new Intl.DateTimeFormat(locale(), { timeStyle: 'short' }).format(from) });
+  }
+  return t('dur.sinceDate', { date: new Intl.DateTimeFormat(locale(), { dateStyle: 'long' }).format(from) });
 }

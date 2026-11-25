@@ -16,7 +16,8 @@ export const app = $state({
 
 /** Horloge partagée, rafraîchie chaque seconde. */
 export const clock = $state({ now: Date.now() });
-setInterval(() => (clock.now = Date.now()), 1000);
+// Rien ne s'affiche à la seconde : un rafraîchissement toutes les 15 s suffit.
+setInterval(() => (clock.now = Date.now()), 15_000);
 
 export interface TrackerView {
   tracker: Tracker;
@@ -59,9 +60,9 @@ export function dismiss(id: number) {
 // ---------- chargement ----------
 
 let unlocked: Set<string> | null = null;
-let onUnlock: ((tracker: Tracker, a: Achievement) => void) | null = null;
+let onUnlock: ((tracker: Tracker, a: Achievement, others: number) => void) | null = null;
 
-export function onAchievement(fn: (tracker: Tracker, a: Achievement) => void) {
+export function onAchievement(fn: (tracker: Tracker, a: Achievement, others: number) => void) {
   onUnlock = fn;
 }
 
@@ -78,7 +79,19 @@ export function checkAchievements(now = Date.now(), notify = true) {
     }
   }
   unlocked = current;
-  for (const [tr, a] of fresh) onUnlock?.(tr, a);
+  // Un seul toast par compteur : le dernier palier atteint, et le nombre des autres
+  // (sinon un événement antidaté de 20 ans débloque une vingtaine de toasts d'un coup).
+  const byTracker = new Map<string, { tr: Tracker; list: Achievement[] }>();
+  for (const [tr, a] of fresh) {
+    const entry = byTracker.get(tr.id) ?? { tr, list: [] };
+    entry.list.push(a);
+    byTracker.set(tr.id, entry);
+  }
+  for (const { tr, list } of byTracker.values()) {
+    // Les paliers sont dans l'ordre croissant ; la durée sans l'emporte sur les autres types.
+    const best = [...list].reverse().find((a) => a.kind === 'abstinence') ?? list[list.length - 1];
+    onUnlock?.(tr, best, list.length - 1);
+  }
 }
 
 export async function refresh(notify = true) {

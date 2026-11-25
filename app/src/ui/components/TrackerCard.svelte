@@ -1,6 +1,6 @@
 <script lang="ts">
   import { db } from '../../lib/db/client';
-  import { humanDuration, preciseDuration, t } from '../../lib/i18n/index.svelte';
+  import { humanDuration, sinceLabel, t } from '../../lib/i18n/index.svelte';
   import { toast, type TrackerView } from '../../lib/state.svelte';
   import { go } from '../../lib/router.svelte';
   import GoalBar from './GoalBar.svelte';
@@ -35,7 +35,7 @@
         <div class="big">{t('dash.never')}</div>
       {:else}
         <div class="big">{humanDuration(s.currentGapFrom, now)}</div>
-        <div class="sub mono">{preciseDuration(s.currentGapFrom, now)} · {t('dash.since')} {tr.icon ?? tr.name}</div>
+        <div class="sub">{sinceLabel(s.currentGapFrom, now)}</div>
       {/if}
     {:else}
       <div class="big">{t('dash.today', { n: s.today })}</div>
@@ -64,7 +64,6 @@
   .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .big { font-size: 1.35rem; font-weight: 750; line-height: 1.2; }
   .sub { color: var(--muted); font-size: 0.875rem; }
-  .mono { font-variant-numeric: tabular-nums; }
   .log {
     flex: none; width: 72px; border: 0; cursor: pointer; font-size: 1.3rem; font-weight: 800;
     background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--text);
