@@ -1,0 +1,33 @@
+# Configuration de lifelog-server, hors NixOS (le module NixOS génère ce fichier).
+# Chemin donné par LIFELOG_CONFIG. Les variables LIFELOG_* l'emportent sur ce fichier.
+# Vérifier avec : lifelog-server --check
+
+listen = "127.0.0.1:8080"                  # LIFELOG_LISTEN
+public_url = "https://lifelog.exemple.fr"  # LIFELOG_PUBLIC_URL (passkeys et retours OIDC)
+database_url = "postgres://lifelog@/lifelog?host=/run/postgresql"  # ou "sqlite:///var/lib/lifelog/lifelog.db?mode=rwc"
+timezone = "Europe/Paris"                  # webhooks reçus sans décalage horaire
+# static_dir = "/chemin/vers/la/pwa"       # déjà réglé par le paquet Nix
+
+[registration]
+enabled = true            # false : plus aucun nouveau compte, les existants se connectent toujours
+
+[auth.passkey]
+enabled = true
+allow_registration = false  # une passkey seule ne crée pas de compte ; on l'ajoute depuis un compte connecté
+
+# Autant de fournisseurs OIDC que voulu. URL de retour à déclarer chez le fournisseur :
+#   https://lifelog.exemple.fr/auth/oidc/callback
+[auth.oidc.pocket-id]
+display_name = "Pocket ID"
+issuer = "https://id.exemple.fr"
+client_id = "lifelog"
+client_secret_file = "/run/secrets/lifelog-pocket-id"
+allow_registration = true
+
+[auth.oidc.google]
+display_name = "Google"
+issuer = "https://accounts.google.com"
+client_id = "1234.apps.googleusercontent.com"
+client_secret_file = "/run/secrets/lifelog-google"
+allow_registration = false  # connexion à un compte existant seulement
+# scopes = ["openid", "email", "profile"]

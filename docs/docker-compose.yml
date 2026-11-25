@@ -1,0 +1,30 @@
+# Exemple : LifeLog + PostgreSQL avec Docker.
+# L'image se construit avec Nix :  nix build .#docker && docker load < result
+# Mettre un reverse proxy HTTPS (Caddy, nginx) devant le port 8080.
+services:
+  lifelog:
+    image: lifelog:0.1.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      LIFELOG_PUBLIC_URL: https://lifelog.exemple.fr
+      LIFELOG_DATABASE_URL: postgres://lifelog:changeme@db/lifelog
+      LIFELOG_TIMEZONE: Europe/Paris
+      # Fournisseurs OIDC : monter un fichier TOML et pointer LIFELOG_CONFIG dessus.
+      # LIFELOG_CONFIG: /config/lifelog.toml
+    # volumes:
+    #   - ./lifelog.toml:/config/lifelog.toml:ro
+    depends_on:
+      - db
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lifelog
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: lifelog
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:
