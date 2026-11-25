@@ -2,7 +2,7 @@ import type { Key } from './fr';
 
 export const en: Record<Key, string> = {
   'app.name': 'LifeLog',
-  'app.tagline': 'Your life\'s achievements, like in a video game.',
+  'app.tagline': 'Track what matters. Your habits, your trackers, your data.',
   'common.back': 'Back',
   'common.save': 'Save',
   'common.cancel': 'Cancel',
