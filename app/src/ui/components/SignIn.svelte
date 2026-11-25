@@ -28,12 +28,13 @@
 <div class="card stack">
   {#if authError}<p class="banner warn" style="margin:0">{authError}</p>{/if}
   <p style="margin:0">{t('sync.signedOut')}</p>
-  {#if sync.health?.auth.passkey && supported()}
-    <button class="btn primary" disabled={busy} onclick={() => run(passkeyLogin)}>🔑 {t('sync.signInPasskey')}</button>
-  {/if}
+  <!-- Le fournisseur d'identité d'abord : c'est la voie normale sur un serveur qui en a un. -->
   {#each sync.health?.auth.oidc ?? [] as p (p.id)}
-    <a class="btn" class:primary={!sync.health?.auth.passkey} href="/auth/oidc/{p.id}/start">{t('sync.signInWith', { name: p.name })}</a>
+    <a class="btn primary" href="/auth/oidc/{p.id}/start">🔐 {t('sync.signInWith', { name: p.name })}</a>
   {/each}
+  {#if sync.health?.auth.passkey && supported()}
+    <button class="btn" class:primary={!sync.health?.auth.oidc.length} disabled={busy} onclick={() => run(passkeyLogin)}>🔑 {t('sync.signInPasskey')}</button>
+  {/if}
   {#if sync.health?.auth.passkey_registration && supported()}
     <hr />
     <div class="row">
@@ -45,6 +46,7 @@
 
 <style>
   .stack { display: grid; gap: 10px; }
-  a.btn { text-decoration: none; color: inherit; }
+  a.btn { text-decoration: none; }
+  a.btn:not(.primary) { color: inherit; }
   hr { border: 0; border-top: 1px solid var(--border); width: 100%; margin: 4px 0; }
 </style>
