@@ -128,7 +128,7 @@
       <button class="icon-btn" onclick={() => go(`t/${tracker.id}/edit`)} aria-label={t('common.edit')} title={t('common.edit')}>✏️</button>
     </header>
 
-    <section class="hero card">
+    <section class="hero">
       {#if tracker.display_mode === 'abstinence'}
         <div class="big">{humanDuration(view.stats.currentGapFrom, clock.now)}</div>
         <div class="muted">{sinceLabel(view.stats.currentGapFrom, clock.now, view.stats.count === 0)}</div>
@@ -277,9 +277,9 @@
 {/if}
 
 <style>
-  .h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-  .hero { display: grid; gap: 4px; border-left: 6px solid var(--c); }
-  .big { font-size: 2rem; font-weight: 800; line-height: 1.15; }
+  .h2 { font-size: 1.05rem; font-weight: 700; }
+  .hero { display: grid; gap: 4px; padding: 18px; border-radius: var(--radius); background: color-mix(in srgb, var(--c) 16%, var(--surface)); }
+  .big { font-family: var(--font-display); font-size: 2.4rem; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
   .chart-nav { margin-bottom: 8px; flex-wrap: nowrap; }
   .segmented.show { margin-top: 8px; }
   .measures { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
@@ -289,6 +289,6 @@
   .chart-nav .range { text-align: center; font-weight: 600; }
   .chart-nav .linkish { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
   .chart-nav .icon-btn:disabled { opacity: 0.3; cursor: default; }
-  .log { justify-self: start; margin-top: 8px; min-width: 120px; font-size: 1.1rem; }
+  .log { justify-self: start; margin-top: 10px; min-width: 120px; font-family: var(--font-display); font-size: 1.15rem; background: var(--c); border-color: var(--c); color: #fff; color: lch(from var(--c) calc((68 - l) * 100) 0 0); }
   .ev { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 0; border: 0; background: none; cursor: pointer; }
 </style>
