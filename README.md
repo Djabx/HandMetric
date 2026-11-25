@@ -40,12 +40,26 @@ LifeLog est une application web progressive (PWA) qui permet de suivre des évé
 
 Les choix détaillés et leurs justifications sont dans la [spec](docs/SPEC.md#7-choix-techniques).
 
+## Développement et déploiement (prévu)
+
+Le dépôt inclut un Nix flake :
+
+```sh
+nix develop                     # environnement de dev complet
+nix build .#server              # serveur Rust
+nix build .#app                 # PWA statique
+nix flake check                 # tests et lint
+```
+
+Pour l'auto-hébergement sous NixOS, le flake fournit un module `services.lifelog`. Une image Docker est aussi disponible.
+
 ## Organisation du dépôt (prévue)
 
 ```
 app/       PWA (TypeScript)
 server/    Serveur de synchronisation (Rust)
 docs/      Spécification et décisions d'architecture
+flake.nix  Environnement de dev, paquets et module NixOS
 ```
 
 ## Licence

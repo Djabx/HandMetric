@@ -315,7 +315,7 @@ pub trait Storage: Send + Sync {
 
 Configuration par variables d'environnement, par exemple `LIFELOG_DATABASE_URL=postgres://…` ou `sqlite:///data/lifelog.db`. Le schéma d'URL choisit l'implémentation.
 
-Distribution : un binaire statique et une image Docker. Un `docker-compose.yml` d'exemple avec PostgreSQL.
+Distribution : un module NixOS, un binaire statique et une image Docker (construite par le flake, voir 6.4). Un `docker-compose.yml` d'exemple avec PostgreSQL.
 
 ### 6.3 Redis
 
@@ -324,6 +324,36 @@ Distribution : un binaire statique et une image Docker. Un `docker-compose.yml` 
 - limiter le débit des requêtes si le serveur devient multi-utilisateur.
 
 Le code ne doit pas en dépendre : derrière un trait, désactivé par défaut.
+
+### 6.4 Nix
+
+Le dépôt fournit un **`flake.nix` à la racine**, dès le squelette (étape 1 du plan). Il expose :
+
+| Sortie | Contenu |
+|---|---|
+| `devShells.default` | Toolchain Rust (via `rust-overlay` ou `fenix`, version épinglée), Node.js + pnpm, `sqlx-cli`, `sqlite`, `postgresql` (client et serveur local de test), outils de lint. `nix develop` suffit pour tout builder et tester. |
+| `packages.server` | Binaire `lifelog-server` (via `crane` pour profiter du cache des dépendances Cargo). |
+| `packages.app` | PWA buildée (fichiers statiques), via `pnpm` et un hash des dépendances fixé. |
+| `packages.default` | Le serveur, avec la PWA embarquée pour qu'il la serve sur la même origine (voir 5.5). |
+| `packages.docker` | Image OCI construite avec `dockerTools`, sans Dockerfile. |
+| `nixosModules.default` | Module NixOS `services.lifelog` pour l'auto-hébergement (voir ci-dessous). |
+| `checks` | Tests Rust et TS, `clippy`, formatage. Lancés par `nix flake check` en CI. |
+
+Module NixOS, exemple d'usage :
+
+```nix
+services.lifelog = {
+  enable = true;
+  listen = "127.0.0.1:8080";
+  database.url = "postgres:///lifelog?host=/run/postgresql";
+  database.createLocally = true;      # crée la base et le rôle PostgreSQL
+  settingsFile = "/run/secrets/lifelog.toml";  # secrets OIDC (sops-nix, agenix…)
+};
+```
+
+Le module crée un service systemd durci (`DynamicUser`, `ProtectSystem=strict`, `StateDirectory`), et avec `createLocally` configure la base dans `services.postgresql`. Le reverse proxy (nginx, Caddy) et le TLS restent à la charge de la configuration de l'hôte.
+
+🟡 **Hypothèse** : `crane` pour Rust et `rust-overlay` pour la toolchain. Ce sont les choix les plus courants, faciles à changer.
 
 ## 7. Choix techniques
 
@@ -338,6 +368,7 @@ Le code ne doit pas en dépendre : derrière un trait, désactivé par défaut.
 | Serveur | **Rust, axum, tokio** | Demandé. axum est le standard de fait, léger. | actix-web (équivalent, moins idiomatique avec tokio). |
 | Accès BDD serveur | **sqlx** (features `postgres`, `sqlite`) | Un seul outil pour les deux moteurs, requêtes vérifiées à la compilation, migrations intégrées. | Diesel (plus lourd), SeaORM (ORM inutile pour 2 tables). |
 | Auth serveur | **Passkeys (`webauthn-rs`) + OIDC générique (`openidconnect`)** | Aucun mot de passe à stocker ni à réinitialiser. OIDC générique : n'importe quel fournisseur sans code spécifique. | Login/mot de passe (refusé), intégrations Google/Facebook codées en dur. |
+| Build et déploiement | **Nix flake** (devShell, paquets, image OCI, module NixOS) | Environnement de dev reproductible, et déploiement déclaratif sur un NUC sous NixOS. Le Docker reste disponible pour les autres. | Dockerfile seul, scripts d'installation. |
 | Format d'échange | **SQLite + JSON** | SQLite = sauvegarde complète et requêtable. JSON = lisible et scriptable. | CSV (perd la structure). |
 
 ### Compatibilité navigateurs
@@ -367,11 +398,11 @@ D'autres services (Garmin Connect, Google Fit / Health Connect, Apple Santé) su
 
 ## 9. Plan de livraison
 
-1. **Squelette** : monorepo, PWA Vite + Svelte installable, SQLite WASM dans un worker, migrations.
+1. **Squelette** : monorepo, `flake.nix` (devShell et checks), PWA Vite + Svelte installable, SQLite WASM dans un worker, migrations.
 2. **Cœur hors ligne** : compteurs, événements, tableau de bord, durées.
 3. **Stats et succès** : séries, records, paliers, heatmap.
 4. **Export / import** SQLite et JSON, avec tests de fusion (idempotence, commutativité).
-5. **Serveur Rust** : API sync, backends PostgreSQL et SQLite, passkeys puis OIDC, image Docker.
+5. **Serveur Rust** : API sync, backends PostgreSQL et SQLite, passkeys puis OIDC, paquet Nix, module NixOS et image Docker.
 6. **Sync côté PWA** : écran de configuration, cycle push/pull, indicateur d'état.
 
 Les étapes 1 à 4 donnent une application complète utilisable sans serveur.
