@@ -19,7 +19,7 @@ export default defineConfig({
       manifest: {
         name: 'LifeLog',
         short_name: 'LifeLog',
-        description: 'Les succès de ta vie, comme dans un jeu vidéo.',
+        description: 'Compte ce qui compte. Tes habitudes, tes compteurs, tes données.',
         theme_color: '#5b3df5',
         background_color: '#f6f4ff',
         display: 'standalone',

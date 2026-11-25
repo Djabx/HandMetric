@@ -1,6 +1,6 @@
 export const fr = {
   'app.name': 'LifeLog',
-  'app.tagline': 'Les succès de ta vie, comme dans un jeu vidéo.',
+  'app.tagline': 'Compte ce qui compte. Tes habitudes, tes compteurs, tes données.',
   'common.back': 'Retour',
   'common.save': 'Enregistrer',
   'common.cancel': 'Annuler',

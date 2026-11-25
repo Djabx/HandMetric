@@ -1,6 +1,6 @@
 # LifeLog
 
-> Les succès de ta vie, comme dans un jeu vidéo.
+> Compte ce qui compte. Tes habitudes, tes compteurs, tes données.
 
 LifeLog est une application web progressive (PWA) qui permet de suivre des événements du quotidien, bons ou mauvais, et de les transformer en compteurs et en succès façon jeu vidéo :
 
