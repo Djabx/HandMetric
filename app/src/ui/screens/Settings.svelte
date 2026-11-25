@@ -148,7 +148,7 @@
   <section class="section" id="about">
     <h2>{t('settings.about')}</h2>
     <p class="small muted">
-      {t('app.tagline')}<br />
+      {t('app.tagline')} <a href="#/about">{t('about.more')}</a><br />
       {t('settings.version', { v: APP_VERSION })} · <a href="https://github.com/Djabx/lifelog" target="_blank" rel="noopener">{t('settings.source')}</a> · MIT
     </p>
   </section>

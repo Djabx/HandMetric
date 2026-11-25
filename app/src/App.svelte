@@ -7,6 +7,7 @@
   import TrackerDetail from './ui/screens/TrackerDetail.svelte';
   import TrackerForm from './ui/screens/TrackerForm.svelte';
   import Settings from './ui/screens/Settings.svelte';
+  import About from './ui/screens/About.svelte';
   import Toasts from './ui/components/Toasts.svelte';
   import { startSync } from './lib/sync/client';
 
@@ -34,6 +35,8 @@
   {#key router.route.template}<TrackerForm template={router.route.template ?? null} />{/key}
 {:else if router.route.name === 'settings'}
   <Settings />
+{:else if router.route.name === 'about'}
+  <About />
 {:else}
   <Dashboard />
 {/if}
