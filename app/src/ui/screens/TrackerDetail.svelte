@@ -2,10 +2,11 @@
   import { app, clock, viewOf } from '../../lib/state.svelte';
   import { fmtDate, fmtDateTime, fmtNumber, humanDuration, locale, sinceLabel, t } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
-  import { evDay, fieldSummaries, heatmap, periodSeries } from '../../lib/domain/stats';
+  import { evDay, eventsInRange, fieldSummaries, heatmap, measureSeries, periodSeries } from '../../lib/domain/stats';
   import { periodKey } from '../../lib/domain/time';
   import { localOffset } from '../../lib/db/store';
-  import { unitLabel } from '../../lib/templates';
+  import { PALETTE, unitLabel } from '../../lib/templates';
+  import LineChart from '../components/LineChart.svelte';
   import { db } from '../../lib/db/client';
   import { toast } from '../../lib/state.svelte';
   import type { ChartPeriod, LifeEvent } from '../../lib/types';
@@ -30,6 +31,27 @@
   const WINDOW: Record<ChartPeriod, number> = { day: 14, week: 12, month: 12, year: 10 };
   const series = $derived(view ? periodSeries(view.events, chartPeriod, WINDOW[chartPeriod], clock.now, localOffset(), chartOffset) : []);
   const seriesTotal = $derived(series.reduce((n, d) => n + d.count, 0));
+
+  /** Ce que montre le graphique : le nombre d'événements, une mesure, ou toutes les mesures. */
+  let chartShow = $state<'count' | 'all' | string>('count');
+  const shownFields = $derived(
+    !view ? [] : chartShow === 'all' ? view.fields : view.fields.filter((f) => f.id === chartShow),
+  );
+  /** Couleurs des courbes : celle du compteur d'abord, puis la palette. */
+  const lineColors = $derived([tracker?.color ?? PALETTE[0], ...PALETTE.filter((c) => c !== tracker?.color)]);
+  const lineSeries = $derived(
+    shownFields.map((f, i) => ({
+      name: f.name + (f.unit ? ` (${unitLabel(f.unit)})` : ''),
+      color: lineColors[i % lineColors.length],
+      points: measureSeries(view?.events ?? [], f.id, chartPeriod, series.map((d) => d.key)),
+    })),
+  );
+  /** Moyenne, min, max et total de chaque mesure sur la plage affichée. */
+  const rangeSummaries = $derived(
+    view && series.length
+      ? fieldSummaries(view.fields, eventsInRange(view.events, chartPeriod, series[0].key, series[series.length - 1].key))
+      : [],
+  );
   /** Il reste des événements avant la fenêtre affichée. */
   const hasOlder = $derived(!!view && !!series.length && view.events.some((e) => periodKey(evDay(e), chartPeriod) < series[0].key));
   function setPeriod(p: ChartPeriod) {
@@ -49,7 +71,6 @@
     return `${fmt(first, { day: 'numeric', month: 'short' })} – ${fmt(end, { day: 'numeric', month: 'short', year: 'numeric' })}`;
   }
   const cells = $derived(view ? heatmap(view.stats.perDay, clock.now, localOffset()) : []);
-  const measures = $derived(view ? fieldSummaries(view.fields, view.events) : []);
   const history = $derived(view ? [...view.events].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)) : []);
   let shown = $state(30);
   let allAch = $state(false);
@@ -146,26 +167,6 @@
       </section>
     {/if}
 
-    {#if measures.length}
-      <section class="section">
-        <h2>{t('detail.measures')}</h2>
-        <div class="stats-grid">
-          {#each measures as m (m.field.id)}
-            <div class="stat">
-              <div class="label">{m.field.name}{m.field.unit ? ` (${unitLabel(m.field.unit)})` : ''}</div>
-              <div class="value">{m.last !== null ? fmtNumber(m.last) : '–'}</div>
-              {#if m.count}
-                <div class="small muted">
-                  {t('detail.measure.avg')} {fmtNumber(m.average ?? 0)} · {t('detail.measure.total')} {fmtNumber(m.total)}<br />
-                  {t('detail.measure.minmax')} {fmtNumber(m.min ?? 0)} / {fmtNumber(m.max ?? 0)}
-                </div>
-              {/if}
-            </div>
-          {/each}
-        </div>
-      </section>
-    {/if}
-
     <section class="section">
       <div class="row" style="justify-content:space-between">
         <h2 class="h2" style="margin:0">{t('detail.chart', { period: t(`period.${chartPeriod}`) })}</h2>
@@ -175,6 +176,17 @@
           {/each}
         </div>
       </div>
+      {#if view.fields.length}
+        <div class="segmented show" role="group" aria-label={t('detail.chart.show')}>
+          <button aria-pressed={chartShow === 'count'} onclick={() => (chartShow = 'count')}>{t('detail.chart.count')}</button>
+          {#each view.fields as f (f.id)}
+            <button aria-pressed={chartShow === f.id} onclick={() => (chartShow = f.id)}>{f.name}</button>
+          {/each}
+          {#if view.fields.length > 1}
+            <button aria-pressed={chartShow === 'all'} onclick={() => (chartShow = 'all')}>{t('detail.chart.allMeasures')}</button>
+          {/if}
+        </div>
+      {/if}
       <div class="card" style="margin-top:8px">
         <div class="row chart-nav">
           <button class="icon-btn" disabled={!hasOlder} onclick={() => chartOffset++} aria-label={t('detail.chart.older')} title={t('detail.chart.older')}>‹</button>
@@ -187,7 +199,38 @@
           </div>
           <button class="icon-btn" disabled={chartOffset === 0} onclick={() => chartOffset--} aria-label={t('detail.chart.newer')} title={t('detail.chart.newer')}>›</button>
         </div>
-        <BarChart data={series} {color} target={view.goal?.period === chartPeriod ? view.goal.target : null} labelOf={periodLabel} />
+        {#if chartShow === 'count' || !lineSeries.length}
+          <BarChart data={series} {color} target={view.goal?.period === chartPeriod ? view.goal.target : null} labelOf={periodLabel} />
+        {:else}
+          <LineChart series={lineSeries} labelOf={periodLabel} fmt={(n) => fmtNumber(n, 1)} />
+          <p class="small muted" style="margin:4px 0 0;text-align:center">{t('detail.chart.avgHint', { period: t(`period.${chartPeriod}`) })}</p>
+        {/if}
+        {#if rangeSummaries.some((m) => m.count)}
+          <table class="measures">
+            <thead>
+              <tr>
+                <th scope="col">{t('detail.measures.range')}</th>
+                <th scope="col">{t('detail.measure.avg')}</th>
+                <th scope="col">{t('detail.measure.minmax')}</th>
+                <th scope="col">{t('detail.measure.total')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each rangeSummaries as m (m.field.id)}
+                <tr>
+                  <th scope="row">{m.field.name}{m.field.unit ? ` (${unitLabel(m.field.unit)})` : ''}</th>
+                  {#if m.count}
+                    <td>{fmtNumber(m.average ?? 0, 1)}</td>
+                    <td>{fmtNumber(m.min ?? 0)} – {fmtNumber(m.max ?? 0)}</td>
+                    <td>{fmtNumber(m.total)}</td>
+                  {:else}
+                    <td>–</td><td>–</td><td>–</td>
+                  {/if}
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        {/if}
       </div>
     </section>
 
@@ -238,6 +281,11 @@
   .hero { display: grid; gap: 4px; border-left: 6px solid var(--c); }
   .big { font-size: 2rem; font-weight: 800; line-height: 1.15; }
   .chart-nav { margin-bottom: 8px; flex-wrap: nowrap; }
+  .segmented.show { margin-top: 8px; }
+  .measures { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+  .measures th, .measures td { padding: 6px 4px; text-align: right; border-top: 1px solid var(--border); }
+  .measures thead th { color: var(--muted); font-weight: 500; border-top: 0; }
+  .measures th[scope='row'], .measures thead th:first-child { text-align: left; font-weight: 600; }
   .chart-nav .range { text-align: center; font-weight: 600; }
   .chart-nav .linkish { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
   .chart-nav .icon-btn:disabled { opacity: 0.3; cursor: default; }

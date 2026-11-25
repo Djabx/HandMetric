@@ -207,3 +207,44 @@ export function heatmap(perDay: Map<string, number>, now: number, tzOffset: numb
 }
 
 export { addMonths };
+
+/** Événements dont la période (au sens de `period`) tombe entre deux clés incluses. */
+export function eventsInRange(events: LifeEvent[], period: ChartPeriod, firstKey: string, lastKey: string): LifeEvent[] {
+  return events.filter((e) => {
+    const k = periodKey(evDay(e), period);
+    return k >= firstKey && k <= lastKey;
+  });
+}
+
+export interface MeasurePoint {
+  key: string;
+  /** Moyenne des valeurs de la période, null s'il n'y en a pas. */
+  avg: number | null;
+  min: number | null;
+  max: number | null;
+  count: number;
+}
+
+/** Moyenne d'une mesure par période, alignée sur les clés d'une série de périodes. */
+export function measureSeries(events: LifeEvent[], fieldId: string, period: ChartPeriod, keys: string[]): MeasurePoint[] {
+  const byKey = new Map<string, number[]>();
+  for (const e of events) {
+    const v = e.measures?.[fieldId];
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    const k = periodKey(evDay(e), period);
+    const list = byKey.get(k);
+    if (list) list.push(v);
+    else byKey.set(k, [v]);
+  }
+  return keys.map((key) => {
+    const values = byKey.get(key) ?? [];
+    if (!values.length) return { key, avg: null, min: null, max: null, count: 0 };
+    return {
+      key,
+      avg: values.reduce((s, v) => s + v, 0) / values.length,
+      min: Math.min(...values),
+      max: Math.max(...values),
+      count: values.length,
+    };
+  });
+}

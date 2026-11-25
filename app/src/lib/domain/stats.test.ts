@@ -92,3 +92,17 @@ describe('périodes affichées', () => {
     expect(months[1].count).toBe(1); // janvier 2025
   });
 });
+
+describe('mesures par période', () => {
+  it('moyenne par période et résumé sur la plage', async () => {
+    const { measureSeries, eventsInRange, fieldSummaries } = await import('./stats');
+    const ev = (iso: string, sys: number, dia: number) => ({ id: iso, tracker_id: 't', occurred_at: iso, tz_offset: 0, measures: { sys, dia }, note: '', created_at: iso, updated_at: '', device_id: '', deleted_at: null });
+    const events = [ev('2026-09-03T08:00:00Z', 130, 85), ev('2026-09-20T08:00:00Z', 120, 80), ev('2026-11-02T08:00:00Z', 118, 76)];
+    const s = measureSeries(events as never, 'sys', 'month', ['2026-09', '2026-10', '2026-11']);
+    expect(s.map((p) => p.avg)).toEqual([125, null, 118]);
+    const inRange = eventsInRange(events as never, 'month', '2026-10', '2026-11');
+    expect(inRange).toHaveLength(1);
+    const [dia] = fieldSummaries([{ id: 'dia', tracker_id: 't', name: 'Dia', unit: null, sort_order: 0 }] as never, inRange);
+    expect(dia.average).toBe(76);
+  });
+});
