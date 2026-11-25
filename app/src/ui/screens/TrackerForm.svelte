@@ -1,0 +1,200 @@
+<script lang="ts">
+  import { app } from '../../lib/state.svelte';
+  import { db } from '../../lib/db/client';
+  import { t } from '../../lib/i18n/index.svelte';
+  import { back, go } from '../../lib/router.svelte';
+  import { PALETTE, TEMPLATES, UNIT_SUGGESTIONS } from '../../lib/templates';
+  import { toast } from '../../lib/state.svelte';
+  import type { DisplayMode, GoalKind, Period, Polarity } from '../../lib/types';
+
+  let { id = null, template = null }: { id?: string | null; template?: string | null } = $props();
+
+  // svelte-ignore state_referenced_locally
+  const existing = id ? (app.trackers.find((x) => x.id === id) ?? app.archived.find((x) => x.id === id) ?? null) : null;
+  // svelte-ignore state_referenced_locally
+  const tpl = template ? TEMPLATES.find((x) => x.id === template) : undefined;
+
+  let name = $state(existing?.name ?? (tpl ? t(tpl.name) : ''));
+  let icon = $state(existing?.icon ?? tpl?.icon ?? '');
+  let color = $state(existing?.color ?? tpl?.color ?? PALETTE[5]);
+  let polarity = $state<Polarity>(existing?.polarity ?? tpl?.polarity ?? 'good');
+  let mode = $state<DisplayMode>(existing?.display_mode ?? tpl?.display_mode ?? 'frequency');
+  let goalKind = $state<GoalKind | ''>(existing?.goal_kind ?? tpl?.goal?.kind ?? '');
+  let goalCount = $state<number>(existing?.goal_count ?? tpl?.goal?.count ?? 1);
+  let goalPeriod = $state<Period>(existing?.goal_period ?? tpl?.goal?.period ?? 'week');
+  // svelte-ignore state_referenced_locally
+  let fields = $state(
+    existing
+      ? app.fields.filter((f) => f.tracker_id === existing.id).map((f) => ({ id: f.id as string | undefined, name: f.name, unit: f.unit ?? '' }))
+      : (tpl?.fields ?? []).map((f) => ({ id: undefined as string | undefined, name: t(f.name), unit: f.unit })),
+  );
+  let busy = $state(false);
+
+  const ICONS = ['🚬', '🍷', '🍺', '☕', '🍫', '🏃', '🚴', '🏊', '🧘', '💪', '💧', '😴', '🩺', '💊', '📚', '🎮', '📱', '🚽', '🧹', '💸', '🤬', '❤️', '⭐', '🎯'];
+
+  function setPolarity(p: Polarity) {
+    polarity = p;
+    if (!existing) mode = p === 'bad' ? 'abstinence' : 'frequency';
+  }
+
+  async function save(e: SubmitEvent) {
+    e.preventDefault();
+    busy = true;
+    try {
+      const tr = await db.write(
+        'saveTracker',
+        {
+          id: existing?.id,
+          name,
+          icon: icon.trim() || null,
+          color,
+          polarity,
+          display_mode: mode,
+          goal_kind: goalKind || null,
+          goal_count: goalKind ? goalCount : null,
+          goal_period: goalKind ? goalPeriod : null,
+        },
+        $state.snapshot(fields).map((f) => ({ id: f.id, name: f.name, unit: f.unit || null })),
+      );
+      if (existing) back();
+      else location.replace(`#/t/${tr.id}`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err));
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function archive() {
+    if (!existing) return;
+    await db.write('setArchived', existing.id, !existing.archived_at);
+    go('');
+  }
+
+  async function remove() {
+    if (!existing || !confirm(t('form.deleteConfirm', { name: existing.name }))) return;
+    await db.write('deleteTracker', existing.id);
+    location.replace('#/');
+  }
+</script>
+
+<div class="page">
+  <header class="topbar">
+    <button class="icon-btn" onclick={back} aria-label={t('common.back')}>←</button>
+    <h1>{existing ? t('form.editTitle') : t('form.newTitle')}</h1>
+  </header>
+
+  {#if !existing}
+    <div class="row" style="margin-bottom:16px">
+      {#each TEMPLATES as tp (tp.id)}
+        <a class="btn small" href="#/new/{tp.id}" aria-current={template === tp.id}>{tp.icon} {t(tp.name)}</a>
+      {/each}
+    </div>
+  {/if}
+
+  {#key template}
+    <form onsubmit={save}>
+      <label class="field">
+        <span>{t('form.name')}</span>
+        <input type="text" bind:value={name} required maxlength="80" placeholder={t('form.namePlaceholder')} />
+      </label>
+
+      <div class="field">
+        <span>{t('form.icon')}</span>
+        <div class="row">
+          <input type="text" bind:value={icon} maxlength="8" style="width:72px;text-align:center;font-size:1.3rem" aria-label={t('form.icon')} />
+          <div class="icons">
+            {#each ICONS as i (i)}
+              <button type="button" class="ico" aria-pressed={icon === i} onclick={() => (icon = i)}>{i}</button>
+            {/each}
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <span>{t('form.color')}</span>
+        <div class="row">
+          {#each PALETTE as c (c)}
+            <button type="button" class="swatch" style:background={c} aria-pressed={color === c} aria-label={c} onclick={() => (color = c)}></button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="field">
+        <span>{t('form.polarity')}</span>
+        <div class="segmented">
+          {#each ['good', 'bad', 'neutral'] as const as p (p)}
+            <button type="button" aria-pressed={polarity === p} onclick={() => setPolarity(p)}>{t(`form.polarity.${p}`)}</button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="field">
+        <span>{t('form.mode')}</span>
+        <div class="segmented">
+          {#each ['abstinence', 'frequency'] as const as m (m)}
+            <button type="button" aria-pressed={mode === m} onclick={() => (mode = m)}>{t(`form.mode.${m}`)}</button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="field">
+        <span>{t('form.goal')}</span>
+        <div class="segmented">
+          <button type="button" aria-pressed={goalKind === ''} onclick={() => (goalKind = '')}>{t('form.goal.none')}</button>
+          <button type="button" aria-pressed={goalKind === 'max'} onclick={() => (goalKind = 'max')}>{t('form.goal.max')}</button>
+          <button type="button" aria-pressed={goalKind === 'min'} onclick={() => (goalKind = 'min')}>{t('form.goal.min')}</button>
+        </div>
+        {#if goalKind}
+          <div class="row">
+            <input type="number" min="0" max="10000" bind:value={goalCount} style="width:96px" aria-label={t('form.goal')} />
+            <span>{t('form.goal.times')}</span>
+            <select bind:value={goalPeriod} style="width:auto">
+              <option value="day">{t('period.day')}</option>
+              <option value="week">{t('period.week')}</option>
+              <option value="month">{t('period.month')}</option>
+            </select>
+          </div>
+        {/if}
+      </div>
+
+      <div class="field">
+        <span>{t('form.fields')}</span>
+        <span class="small muted" style="font-weight:400">{t('form.fieldsHelp')}</span>
+        {#each fields as f, i (i)}
+          <div class="row">
+            <input class="grow" type="text" bind:value={f.name} placeholder={t('form.fieldName')} aria-label={t('form.fieldName')} style="width:auto" />
+            <input type="text" bind:value={f.unit} list="units" placeholder={t('form.fieldUnit')} aria-label={t('form.fieldUnit')} style="width:110px" />
+            <button type="button" class="icon-btn" aria-label={t('common.delete')} onclick={() => fields.splice(i, 1)}>✕</button>
+          </div>
+        {/each}
+        <datalist id="units">
+          {#each UNIT_SUGGESTIONS as u (u)}<option value={u}></option>{/each}
+        </datalist>
+        <div><button type="button" class="btn small" onclick={() => fields.push({ id: undefined, name: '', unit: '' })}>＋ {t('form.addField')}</button></div>
+      </div>
+
+      <div class="row" style="margin-top:24px">
+        <button type="submit" class="btn primary" disabled={busy}>{t('common.save')}</button>
+        <button type="button" class="btn" onclick={back}>{t('common.cancel')}</button>
+      </div>
+    </form>
+  {/key}
+
+  {#if existing}
+    <div class="row section">
+      <button class="btn" onclick={archive}>{existing.archived_at ? t('form.unarchive') : t('form.archive')}</button>
+      <button class="btn danger" onclick={remove}>{t('form.deleteTracker')}</button>
+    </div>
+  {/if}
+</div>
+
+<style>
+  .icons { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+  .ico { width: 40px; height: 40px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
+  .ico[aria-pressed='true'] { border-color: var(--accent); background: var(--surface); }
+  .swatch { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--bg); outline: 1px solid var(--border); cursor: pointer; }
+  .swatch[aria-pressed='true'] { outline: 3px solid var(--text); }
+  a.btn { text-decoration: none; color: inherit; }
+  a.btn[aria-current='true'] { border-color: var(--accent); }
+</style>
