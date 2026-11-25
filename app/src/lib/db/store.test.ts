@@ -96,4 +96,33 @@ describe('Store', () => {
     expect(fields).toHaveLength(1);
     expect(fields[0]).toMatchObject({ id: fa.id, name: 'A2', unit: 'km' });
   });
+
+  it('restaure un compteur supprimé, même après réimport d\'un export plus ancien', async () => {
+    const a = await newStore();
+    const t = a.saveTracker({ name: 'Cigarette', icon: '🚬', color: null, polarity: 'bad', display_mode: 'abstinence', goal_kind: null, goal_count: null, goal_period: null });
+    const kept = a.saveEvent({ tracker_id: t.id });
+    const removedBefore = a.saveEvent({ tracker_id: t.id });
+    a.deleteEvent(removedBefore.id);
+    const backup = a.snapshot();
+
+    await new Promise((r) => setTimeout(r, 5));
+    a.deleteTracker(t.id);
+    const b = await newStore();
+    b.merge(a.snapshot()); // autre appareil : voit la suppression
+    expect(b.getTracker(t.id)).toBeNull();
+    const sum = a.merge(backup);
+    expect(sum.stillDeleted).toBe(1);
+    expect(a.getTracker(t.id)).toBeNull();
+    expect(a.listDeletedTrackers().map((d) => [d.id, d.event_count])).toEqual([[t.id, 1]]);
+
+    a.restoreTracker(t.id);
+    expect(a.getTracker(t.id)?.name).toBe('Cigarette');
+    expect(a.listEvents(t.id).map((e) => e.id)).toEqual([kept.id]); // l'événement supprimé avant reste supprimé
+    expect(a.listDeletedTrackers()).toHaveLength(0);
+
+    // La restauration gagne la fusion sur l'appareil qui avait vu la suppression.
+    b.merge(a.snapshot());
+    expect(b.listEvents(t.id)).toHaveLength(1);
+    expect(b.getTracker(t.id)?.name).toBe('Cigarette');
+  });
 });

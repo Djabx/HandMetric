@@ -10,6 +10,8 @@ export const app = $state({
   persistent: true,
   trackers: [] as Tracker[],
   archived: [] as Tracker[],
+  /** Corbeille : compteurs supprimés, restaurables. */
+  deleted: [] as (Tracker & { event_count: number })[],
   fields: [] as TrackerField[],
   events: [] as LifeEvent[],
 });
@@ -78,7 +80,8 @@ export function checkAchievements(now = Date.now(), notify = true) {
       if (notify && unlocked && !unlocked.has(key)) fresh.push([tr, a]);
     }
   }
-  unlocked = current;
+  // Union : un succès déjà annoncé ne l'est pas de nouveau (compteur restauré depuis la corbeille, événement supprimé puis recréé).
+  unlocked = new Set([...(unlocked ?? []), ...current]);
   // Un seul toast par compteur : le dernier palier atteint, et le nombre des autres
   // (sinon un événement antidaté de 20 ans débloque une vingtaine de toasts d'un coup).
   const byTracker = new Map<string, { tr: Tracker; list: Achievement[] }>();
@@ -95,12 +98,14 @@ export function checkAchievements(now = Date.now(), notify = true) {
 }
 
 export async function refresh(notify = true) {
-  const [trackers, all, fields, events] = await Promise.all([
+  const [trackers, all, fields, events, deleted] = await Promise.all([
     db.call('listTrackers', false),
     db.call('listTrackers', true),
     db.call('listFields'),
     db.call('listAllEvents'),
+    db.call('listDeletedTrackers'),
   ]);
+  app.deleted = deleted;
   app.trackers = trackers;
   app.archived = all.filter((t) => t.archived_at);
   app.fields = fields;

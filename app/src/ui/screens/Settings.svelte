@@ -1,7 +1,7 @@
 <script lang="ts">
   import { app, toast } from '../../lib/state.svelte';
   import { db } from '../../lib/db/client';
-  import { i18n, setLang, t, type Lang } from '../../lib/i18n/index.svelte';
+  import { fmtDate, i18n, setLang, t, type Lang } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
   import { download, stamp } from '../../lib/io/download';
   import { APP_VERSION } from '../../lib/db/store';
@@ -39,6 +39,7 @@
     try {
       const sum = await db.write('importFile', new Uint8Array(await file.arrayBuffer()));
       toast(t('settings.import.done', { inserted: sum.inserted, updated: sum.updated, ignored: sum.ignored }), {}, 8000);
+      if (sum.stillDeleted) toast(t('settings.import.stillDeleted', { n: sum.stillDeleted }), { icon: '🗑️' }, 12000);
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), {}, 8000);
     } finally {
@@ -96,7 +97,30 @@
     </section>
   {/if}
 
-  <section class="section">
+  {#if app.deleted.length}
+    <section class="section">
+      <h2>{t('settings.trash')}</h2>
+      <p class="small muted">{t('settings.trash.help')}</p>
+      <ul class="list card" style="padding:0 16px">
+        {#each app.deleted as tr (tr.id)}
+          <li class="row" style="padding:8px 0">
+            <div class="grow">
+              <div>{tr.icon ?? ''} {tr.name}</div>
+              <div class="small muted">{t('settings.trash.meta', { date: fmtDate(tr.deleted_at!), n: tr.event_count })}</div>
+            </div>
+            <button
+              class="btn small"
+              onclick={async () => {
+                await db.write('restoreTracker', tr.id);
+                toast(t('settings.trash.restored', { name: tr.name }), { icon: '♻️' });
+              }}>{t('settings.trash.restore')}</button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  <section class="section" id="about">
     <h2>{t('settings.about')}</h2>
     <p class="small muted">
       {t('app.tagline')}<br />

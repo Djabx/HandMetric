@@ -73,7 +73,9 @@
 
   async function remove() {
     if (!existing || !confirm(t('form.deleteConfirm', { name: existing.name }))) return;
-    await db.write('deleteTracker', existing.id);
+    const { id, name } = existing;
+    await db.write('deleteTracker', id);
+    toast(t('form.deleted', { name }), { icon: '🗑️', action: { label: t('common.undo'), run: () => void db.write('restoreTracker', id) } }, 8000);
     location.replace('#/');
   }
 </script>
