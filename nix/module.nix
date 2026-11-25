@@ -32,7 +32,7 @@ let
 
   databaseUrl =
     if cfg.database.url != null then cfg.database.url
-    else if cfg.database.createLocally then "postgres://lifelog@/lifelog?host=/run/postgresql"
+    else if cfg.database.createLocally then "postgres:///lifelog?host=/run/postgresql&user=lifelog"
     else "sqlite:///var/lib/lifelog/lifelog.db?mode=rwc";
 in
 {
@@ -69,7 +69,7 @@ in
       url = mkOption {
         type = types.nullOr types.str;
         default = null;
-        example = "postgres://lifelog@/lifelog?host=/run/postgresql";
+        example = "postgres:///lifelog?host=/run/postgresql&user=lifelog";
         description = "URL de la base (postgres:// ou sqlite://). Par défaut : PostgreSQL local si createLocally, sinon SQLite dans /var/lib/lifelog.";
       };
       createLocally = mkOption {
