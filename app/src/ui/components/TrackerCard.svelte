@@ -4,10 +4,17 @@
   import { toast, type TrackerView } from '../../lib/state.svelte';
   import { go } from '../../lib/router.svelte';
   import GoalBar from './GoalBar.svelte';
+  import Tally from './Tally.svelte';
 
   let { view, now, onlog }: { view: TrackerView; now: number; onlog: (v: TrackerView) => void } = $props();
   const tr = $derived(view.tracker);
   const s = $derived(view.stats);
+  const wide = $derived(tr.display_mode === 'abstinence');
+  /** Petits objectifs : on les montre en bâtons plutôt qu'en barre. */
+  const tally = $derived(view.goal && view.goal.target > 0 && view.goal.target <= 15 ? view.goal : null);
+  const tallyLabel = $derived(
+    tally ? t('detail.goal.progress', { current: tally.current, target: tally.target, when: t(`period.this.${tally.period}`) }) : '',
+  );
 
   async function log(e: MouseEvent) {
     e.stopPropagation();
@@ -24,22 +31,25 @@
   }
 </script>
 
-<article class="card tracker" style:--c={tr.color ?? 'var(--accent)'}>
+<article class="tracker" class:wide style:--c={tr.color ?? 'var(--accent)'}>
   <button class="body" onclick={() => go(`t/${tr.id}`)} aria-label={tr.name}>
-    <div class="head">
+    <span class="head">
       <span class="icon" aria-hidden="true">{tr.icon ?? '•'}</span>
       <span class="name">{tr.name}</span>
-    </div>
-    {#if tr.display_mode === 'abstinence'}
-      <div class="big">{humanDuration(s.currentGapFrom, now)}</div>
-      <div class="sub">{sinceLabel(s.currentGapFrom, now, s.count === 0)}</div>
+    </span>
+    {#if wide}
+      <span class="big">{humanDuration(s.currentGapFrom, now)}</span>
+      <span class="sub">{sinceLabel(s.currentGapFrom, now, s.count === 0)}</span>
+    {:else if tally}
+      <Tally current={tally.current} target={tally.target} color="var(--c)" overColor="var(--bad)" label={tallyLabel} />
+      <span class="sub">{tallyLabel}</span>
     {:else}
-      <div class="big">{t('dash.today', { n: s.today })}</div>
-      <div class="sub">
+      <span class="big">{t('dash.today', { n: s.today })}</span>
+      <span class="sub">
         {t('dash.week', { n: s.thisWeek })}{#if s.currentStreak > 1} · 🔥 {t('dash.streak', { n: s.currentStreak })}{/if}
-      </div>
+      </span>
     {/if}
-    {#if view.goal}
+    {#if view.goal && !tally}
       <GoalBar goal={view.goal} compact />
     {/if}
   </button>
@@ -48,22 +58,33 @@
 
 <style>
   .tracker {
-    position: relative; display: flex; align-items: stretch; gap: 8px; padding: 0; overflow: hidden;
-    border-left: 6px solid var(--c);
+    --tint: color-mix(in srgb, var(--c) 16%, var(--surface));
+    display: grid; grid-template-rows: 1fr auto; gap: 10px; padding: 14px;
+    border-radius: var(--radius); background: var(--tint);
+    transition: transform 0.15s;
   }
+  .tracker.wide { grid-column: span 2; grid-template-rows: none; grid-template-columns: 1fr auto; align-items: center; }
+  @media (max-width: 340px) { .tracker.wide { grid-column: auto; } }
   .body {
-    flex: 1; min-width: 0; text-align: left; border: 0; background: none; cursor: pointer;
-    padding: 14px 4px 14px 14px; display: grid; gap: 4px;
+    min-width: 0; text-align: left; border: 0; background: none; cursor: pointer; padding: 0;
+    display: grid; gap: 6px; align-content: start; color: inherit;
   }
-  .head { display: flex; align-items: center; gap: 8px; }
-  .icon { font-size: 1.4rem; }
-  .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .big { font-size: 1.35rem; font-weight: 750; line-height: 1.2; }
-  .sub { color: var(--muted); font-size: 0.875rem; }
+  .head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .icon {
+    flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--surface); font-size: 1.15rem;
+  }
+  .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .big { font-family: var(--font-display); font-size: 1.45rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+  .wide .big { font-size: 2rem; }
+  .sub { color: var(--muted); font-size: 0.8rem; }
   .log {
-    flex: none; width: 72px; border: 0; cursor: pointer; font-size: 1.3rem; font-weight: 800;
-    background: color-mix(in srgb, var(--c) 16%, transparent); color: var(--text);
+    justify-self: start; border: 0; cursor: pointer; border-radius: 999px;
+    min-height: 40px; min-width: 64px; padding: 0 16px;
+    background: var(--c); color: #fff; color: lch(from var(--c) calc((68 - l) * 100) 0 0); font-family: var(--font-display); font-size: 1rem; font-weight: 800;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--c) 35%, transparent);
   }
-  .log:hover { background: color-mix(in srgb, var(--c) 28%, transparent); }
-  .log:active { transform: scale(0.97); }
+  .wide .log { min-height: 52px; min-width: 72px; font-size: 1.15rem; }
+  .log:hover { filter: brightness(1.08); }
+  .log:active { transform: scale(0.94); }
 </style>
