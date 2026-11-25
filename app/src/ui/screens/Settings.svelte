@@ -6,6 +6,7 @@
   import { download, stamp } from '../../lib/io/download';
   import { APP_VERSION, TRASH_DAYS } from '../../lib/db/store';
   import SyncPanel from '../components/SyncPanel.svelte';
+  import { memoryWarning } from '../../lib/storage';
   import { sync } from '../../lib/sync/sync.svelte';
 
   let busy = $state(false);
@@ -14,7 +15,7 @@
   /** Où sont les données : seulement ce navigateur, ou aussi le serveur. */
   const storageMessage = $derived(
     !app.persistent
-      ? t('settings.storage.memory')
+      ? memoryWarning(app.storageProblem, sync.mode === 'server' && !!sync.user)
       : sync.mode === 'server' && sync.user
         ? t('settings.storage.synced', { host })
         : sync.mode === 'server'
@@ -85,6 +86,7 @@
     <div class="card">
       <p class="banner" class:warn={!app.persistent || (sync.mode === 'server' ? !sync.user : persisted === false)} style="margin-top:0">
         {storageMessage}
+        {#if app.storageProblem}<br /><span class="small muted">{app.storageProblem.detail}</span>{/if}
       </p>
       <h3>{t('settings.export')}</h3>
       <div class="row">
@@ -117,8 +119,10 @@
     <section class="section">
       <h2>{t('settings.trash')}</h2>
       <p class="small muted">{t('settings.trash.help')}</p>
+      <div class="card trash">
       {#if app.deleted.length}
-      <ul class="list card" style="padding:0 16px">
+      <h3 class="trash-sub">{t('settings.trash.trackers')} · {app.deleted.length}</h3>
+      <ul class="list">
         {#each app.deleted as tr (tr.id)}
           <li class="row" style="padding:8px 0">
             <div class="grow">
@@ -145,8 +149,8 @@
       </ul>
       {/if}
       {#if app.deletedEvents.length}
-        <h3 class="trash-sub">{t('settings.trash.events')}</h3>
-        <ul class="list card" style="padding:0 16px">
+        <h3 class="trash-sub">{t('settings.trash.events')} · {app.deletedEvents.length}</h3>
+        <ul class="list">
           {#each app.deletedEvents as ev (ev.id)}
             <li class="row" style="padding:8px 0">
               <div class="grow">
@@ -172,6 +176,7 @@
           {/each}
         </ul>
       {/if}
+      </div>
     </section>
   {/if}
 
@@ -185,7 +190,12 @@
 </div>
 
 <style>
-  .trash-sub { font-size: 1rem; margin: 16px 0 8px; }
+  .trash { padding: 4px 16px 4px; }
+  .trash .trash-sub {
+    font-family: inherit; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin: 12px 0 0;
+  }
+  .trash ul + .trash-sub { border-top: 1px solid var(--border); padding-top: 12px; }
   h3 { font-size: 1rem; margin: 16px 0 8px; }
   .trash-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
   .linkish { text-align: left; border: 0; background: none; cursor: pointer; padding: 8px 0; }
