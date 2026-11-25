@@ -87,11 +87,16 @@
   </header>
 
   {#if !existing}
-    <div class="row" style="margin-bottom:16px">
-      {#each TEMPLATES as tp (tp.id)}
-        <a class="btn small" href="#/new/{tp.id}" aria-current={template === tp.id}>{tp.icon} {t(tp.name)}</a>
-      {/each}
-    </div>
+    <section class="templates" aria-labelledby="tpl-title">
+      <h2 id="tpl-title">{t('form.templates')}</h2>
+      <p class="small muted">{t('form.templatesHelp')}</p>
+      <div class="row">
+        <a class="btn small" href="#/new" aria-current={!template}>✏️ {t('form.templateBlank')}</a>
+        {#each TEMPLATES as tp (tp.id)}
+          <a class="btn small" href="#/new/{tp.id}" aria-current={template === tp.id}>{tp.icon} {t(tp.name)}</a>
+        {/each}
+      </div>
+    </section>
   {/if}
 
   {#key template}
@@ -192,6 +197,11 @@
 </div>
 
 <style>
+  .templates { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 16px; padding: 12px 14px; margin-bottom: 20px; }
+  .templates h2 { margin: 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .templates p { margin: 4px 0 10px; }
+  a.btn[aria-current='true'] { border-color: var(--accent); outline: 2px solid var(--accent); }
+  a.btn[aria-current='true'] { border-color: var(--accent); }
   .icons { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
   .ico { width: 40px; height: 40px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); cursor: pointer; font-size: 1.2rem; }
   .ico[aria-pressed='true'] { border-color: var(--accent); background: var(--surface); }
