@@ -40,6 +40,7 @@ describe('Store', () => {
     const t = a.saveTracker({ name: 'Eau', icon: null, color: null, polarity: 'good', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null });
     b.merge(a.snapshot());
     a.saveTracker({ ...t, name: 'Eau (A)' });
+    await new Promise((r) => setTimeout(r, 5)); // sinon même milliseconde : départage par appareil
     b.saveTracker({ ...t, name: 'Eau (B)' }); // plus récent
     const sa = a.snapshot();
     const sb = b.snapshot();

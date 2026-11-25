@@ -46,7 +46,10 @@ pub struct PasskeyConfig {
 }
 impl Default for PasskeyConfig {
     fn default() -> Self {
-        Self { enabled: true, allow_registration: true }
+        Self {
+            enabled: true,
+            allow_registration: true,
+        }
     }
 }
 
@@ -102,7 +105,8 @@ impl Config {
     pub fn load() -> Result<Self> {
         let file: FileConfig = match env("LIFELOG_CONFIG") {
             Some(path) => {
-                let raw = std::fs::read_to_string(&path).with_context(|| format!("lecture de {path}"))?;
+                let raw =
+                    std::fs::read_to_string(&path).with_context(|| format!("lecture de {path}"))?;
                 toml::from_str(&raw).with_context(|| format!("analyse de {path}"))?
             }
             None => FileConfig::default(),
@@ -111,7 +115,9 @@ impl Config {
     }
 
     pub fn from_parts(file: FileConfig) -> Result<Self> {
-        let listen = env("LIFELOG_LISTEN").or(file.listen).unwrap_or_else(|| "127.0.0.1:8080".into());
+        let listen = env("LIFELOG_LISTEN")
+            .or(file.listen)
+            .unwrap_or_else(|| "127.0.0.1:8080".into());
         let public_url = env("LIFELOG_PUBLIC_URL")
             .or(file.public_url)
             .unwrap_or_else(|| {
@@ -123,16 +129,25 @@ impl Config {
         let database_url = env("LIFELOG_DATABASE_URL")
             .or(file.database_url)
             .unwrap_or_else(|| "sqlite://lifelog.db?mode=rwc".into());
-        let static_dir = env("LIFELOG_STATIC_DIR").map(PathBuf::from).or(file.static_dir);
-        let tz_name = env("LIFELOG_TIMEZONE").or(file.timezone).unwrap_or_else(|| "UTC".into());
-        let timezone: chrono_tz::Tz = tz_name.parse().map_err(|_| anyhow::anyhow!("fuseau horaire inconnu : {tz_name}"))?;
+        let static_dir = env("LIFELOG_STATIC_DIR")
+            .map(PathBuf::from)
+            .or(file.static_dir);
+        let tz_name = env("LIFELOG_TIMEZONE")
+            .or(file.timezone)
+            .unwrap_or_else(|| "UTC".into());
+        let timezone: chrono_tz::Tz = tz_name
+            .parse()
+            .map_err(|_| anyhow::anyhow!("fuseau horaire inconnu : {tz_name}"))?;
         let registration_enabled = match env("LIFELOG_REGISTRATION") {
             Some(v) => matches!(v.as_str(), "1" | "true" | "yes" | "on"),
             None => file.registration.enabled,
         };
         let mut oidc = BTreeMap::new();
         for (key, p) in file.auth.oidc {
-            if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            if !key
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
                 bail!("nom de fournisseur OIDC invalide : {key}");
             }
             let client_secret = match (&p.client_secret, &p.client_secret_file) {

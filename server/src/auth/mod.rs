@@ -25,7 +25,10 @@ const SESSION_DAYS: i64 = 90;
 pub fn random_token(prefix: &str) -> String {
     let mut bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut bytes);
-    format!("{prefix}{}", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+    format!(
+        "{prefix}{}",
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+    )
 }
 
 pub fn hash_token(token: &str) -> String {
@@ -77,15 +80,23 @@ impl Db {
             .bind(now())
             .execute(&self.pool)
             .await?;
-        Ok(User { id, display_name: display_name.map(str::to_string) })
+        Ok(User {
+            id,
+            display_name: display_name.map(str::to_string),
+        })
     }
 
     pub async fn get_user(&self, id: &str) -> Result<Option<User>> {
-        Ok(sqlx::query("SELECT id, display_name FROM app_user WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?
-            .map(|r| User { id: r.get("id"), display_name: r.get("display_name") }))
+        Ok(
+            sqlx::query("SELECT id, display_name FROM app_user WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?
+                .map(|r| User {
+                    id: r.get("id"),
+                    display_name: r.get("display_name"),
+                }),
+        )
     }
 
     pub async fn add_identity(
@@ -115,24 +126,37 @@ impl Db {
     }
 
     /// Utilisateur lié à une identité (fournisseur, sujet), et met à jour sa date d'utilisation.
-    pub async fn find_identity(&self, provider: &str, subject: &str) -> Result<Option<(String, Option<String>)>> {
-        let row = sqlx::query("SELECT user_id, credential FROM identity WHERE provider = $1 AND subject = $2")
+    pub async fn find_identity(
+        &self,
+        provider: &str,
+        subject: &str,
+    ) -> Result<Option<(String, Option<String>)>> {
+        let row = sqlx::query(
+            "SELECT user_id, credential FROM identity WHERE provider = $1 AND subject = $2",
+        )
+        .bind(provider)
+        .bind(subject)
+        .fetch_optional(&self.pool)
+        .await?;
+        if row.is_some() {
+            sqlx::query(
+                "UPDATE identity SET last_used_at = $1 WHERE provider = $2 AND subject = $3",
+            )
+            .bind(now())
             .bind(provider)
             .bind(subject)
-            .fetch_optional(&self.pool)
+            .execute(&self.pool)
             .await?;
-        if row.is_some() {
-            sqlx::query("UPDATE identity SET last_used_at = $1 WHERE provider = $2 AND subject = $3")
-                .bind(now())
-                .bind(provider)
-                .bind(subject)
-                .execute(&self.pool)
-                .await?;
         }
         Ok(row.map(|r| (r.get("user_id"), r.get("credential"))))
     }
 
-    pub async fn update_credential(&self, provider: &str, subject: &str, credential: &str) -> Result<()> {
+    pub async fn update_credential(
+        &self,
+        provider: &str,
+        subject: &str,
+        credential: &str,
+    ) -> Result<()> {
         sqlx::query("UPDATE identity SET credential = $1 WHERE provider = $2 AND subject = $3")
             .bind(credential)
             .bind(provider)
@@ -143,13 +167,15 @@ impl Db {
     }
 
     pub async fn passkeys_of(&self, user_id: &str) -> Result<Vec<String>> {
-        Ok(sqlx::query("SELECT credential FROM identity WHERE user_id = $1 AND kind = 'passkey'")
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?
-            .iter()
-            .filter_map(|r| r.get::<Option<String>, _>("credential"))
-            .collect())
+        Ok(
+            sqlx::query("SELECT credential FROM identity WHERE user_id = $1 AND kind = 'passkey'")
+                .bind(user_id)
+                .fetch_all(&self.pool)
+                .await?
+                .iter()
+                .filter_map(|r| r.get::<Option<String>, _>("credential"))
+                .collect(),
+        )
     }
 
     pub async fn identities(&self, user_id: &str) -> Result<Vec<IdentityInfo>> {
@@ -203,25 +229,39 @@ impl Db {
     }
 
     pub async fn session_user(&self, token: &str) -> Result<Option<String>> {
-        Ok(sqlx::query("SELECT user_id FROM session WHERE token_hash = $1 AND expires_at > $2")
-            .bind(hash_token(token))
-            .bind(now())
-            .fetch_optional(&self.pool)
-            .await?
-            .map(|r| r.get("user_id")))
+        Ok(
+            sqlx::query("SELECT user_id FROM session WHERE token_hash = $1 AND expires_at > $2")
+                .bind(hash_token(token))
+                .bind(now())
+                .fetch_optional(&self.pool)
+                .await?
+                .map(|r| r.get("user_id")),
+        )
     }
 
     pub async fn delete_session(&self, token: &str) -> Result<()> {
-        sqlx::query("DELETE FROM session WHERE token_hash = $1").bind(hash_token(token)).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM session WHERE token_hash = $1")
+            .bind(hash_token(token))
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     pub async fn purge_sessions(&self) -> Result<()> {
-        sqlx::query("DELETE FROM session WHERE expires_at <= $1").bind(now()).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM session WHERE expires_at <= $1")
+            .bind(now())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
-    pub async fn create_token(&self, user_id: &str, name: &str, scope: &str, tracker_id: Option<&str>) -> Result<(TokenInfo, String)> {
+    pub async fn create_token(
+        &self,
+        user_id: &str,
+        name: &str,
+        scope: &str,
+        tracker_id: Option<&str>,
+    ) -> Result<(TokenInfo, String)> {
         let token = random_token("lt_");
         let info = TokenInfo {
             id: uuid::Uuid::now_v7().to_string(),
@@ -266,23 +306,36 @@ impl Db {
     }
 
     pub async fn revoke_token(&self, user_id: &str, id: &str) -> Result<bool> {
-        Ok(sqlx::query("DELETE FROM api_token WHERE user_id = $1 AND id = $2")
-            .bind(user_id)
-            .bind(id)
-            .execute(&self.pool)
-            .await?
-            .rows_affected()
-            > 0)
+        Ok(
+            sqlx::query("DELETE FROM api_token WHERE user_id = $1 AND id = $2")
+                .bind(user_id)
+                .bind(id)
+                .execute(&self.pool)
+                .await?
+                .rows_affected()
+                > 0,
+        )
     }
 
     pub async fn token_auth(&self, token: &str) -> Result<Option<ApiToken>> {
-        let row = sqlx::query("SELECT id, user_id, scope, tracker_id FROM api_token WHERE token_hash = $1")
-            .bind(hash_token(token))
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query(
+            "SELECT id, user_id, scope, tracker_id FROM api_token WHERE token_hash = $1",
+        )
+        .bind(hash_token(token))
+        .fetch_optional(&self.pool)
+        .await?;
         let Some(r) = row else { return Ok(None) };
-        let t = ApiToken { id: r.get("id"), user_id: r.get("user_id"), scope: r.get("scope"), tracker_id: r.get("tracker_id") };
-        sqlx::query("UPDATE api_token SET last_used_at = $1 WHERE id = $2").bind(now()).bind(&t.id).execute(&self.pool).await?;
+        let t = ApiToken {
+            id: r.get("id"),
+            user_id: r.get("user_id"),
+            scope: r.get("scope"),
+            tracker_id: r.get("tracker_id"),
+        };
+        sqlx::query("UPDATE api_token SET last_used_at = $1 WHERE id = $2")
+            .bind(now())
+            .bind(&t.id)
+            .execute(&self.pool)
+            .await?;
         Ok(Some(t))
     }
 }
@@ -304,8 +357,14 @@ fn time_days(d: i64) -> time::Duration {
 
 /// Utilisateur connecté (cookie de session), ou 401.
 pub async fn require_user(state: &AppState, jar: &CookieJar) -> Result<String, AppError> {
-    let Some(c) = jar.get(SESSION_COOKIE) else { return Err(AppError::Unauthorized) };
-    state.db.session_user(c.value()).await?.ok_or(AppError::Unauthorized)
+    let Some(c) = jar.get(SESSION_COOKIE) else {
+        return Err(AppError::Unauthorized);
+    };
+    state
+        .db
+        .session_user(c.value())
+        .await?
+        .ok_or(AppError::Unauthorized)
 }
 
 pub async fn optional_user(state: &AppState, jar: &CookieJar) -> Result<Option<String>, AppError> {
@@ -331,7 +390,12 @@ pub fn may_register(state: &AppState, provider: Option<&str>) -> bool {
     }
     match provider {
         None => state.config.passkey.allow_registration,
-        Some(p) => state.config.oidc.get(p).map(|o| o.allow_registration).unwrap_or(false),
+        Some(p) => state
+            .config
+            .oidc
+            .get(p)
+            .map(|o| o.allow_registration)
+            .unwrap_or(false),
     }
 }
 
@@ -343,7 +407,10 @@ pub struct Ephemeral<T> {
 
 impl<T> Ephemeral<T> {
     pub fn new(ttl: Duration) -> Self {
-        Self { items: Mutex::new(HashMap::new()), ttl }
+        Self {
+            items: Mutex::new(HashMap::new()),
+            ttl,
+        }
     }
     pub fn put(&self, key: String, value: T) {
         let mut m = self.items.lock().unwrap();
@@ -356,7 +423,9 @@ impl<T> Ephemeral<T> {
     }
     pub fn take(&self, key: &str) -> Option<T> {
         let mut m = self.items.lock().unwrap();
-        m.remove(key).filter(|(t, _)| t.elapsed() < self.ttl).map(|(_, v)| v)
+        m.remove(key)
+            .filter(|(t, _)| t.elapsed() < self.ttl)
+            .map(|(_, v)| v)
     }
 }
 
@@ -368,7 +437,10 @@ pub struct RateLimiter {
 
 impl RateLimiter {
     pub fn new(per_minute: usize) -> Self {
-        Self { hits: Mutex::new(HashMap::new()), per_minute }
+        Self {
+            hits: Mutex::new(HashMap::new()),
+            per_minute,
+        }
     }
     pub fn check(&self, key: &str) -> bool {
         let mut m = self.hits.lock().unwrap();

@@ -9,7 +9,9 @@ pub struct Hlc {
 
 impl Hlc {
     pub fn new() -> Self {
-        Self { state: Mutex::new((0, 0)) }
+        Self {
+            state: Mutex::new((0, 0)),
+        }
     }
 
     pub fn now(&self) -> String {
@@ -29,8 +31,12 @@ impl Hlc {
 
     pub fn receive(&self, remote: &str) {
         let mut parts = remote.splitn(3, '-');
-        let (Some(ms), Some(c)) = (parts.next(), parts.next()) else { return };
-        let (Ok(ms), Ok(c)) = (ms.parse::<i64>(), c.parse::<u32>()) else { return };
+        let (Some(ms), Some(c)) = (parts.next(), parts.next()) else {
+            return;
+        };
+        let (Ok(ms), Ok(c)) = (ms.parse::<i64>(), c.parse::<u32>()) else {
+            return;
+        };
         let mut s = self.state.lock().unwrap();
         if (ms, c) > *s {
             *s = (ms, c);
