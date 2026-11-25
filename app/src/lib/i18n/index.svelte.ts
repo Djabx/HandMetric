@@ -84,10 +84,15 @@ export function humanDuration(from: number, to: number): string {
   return next && next[0] > 0 ? `${top} ${t('dur.and')} ${unit(...next)}` : top;
 }
 
-/** Point de départ d'une durée : « depuis le 12 mars 2006 », ou « depuis 14:05 » le jour même. */
-export function sinceLabel(from: number, now: number): string {
+/**
+ * Point de départ d'une durée : « depuis le 12 mars 2006 », ou « depuis 14:05 » le jour même.
+ * fromCreation : le compteur n'a encore aucun événement, la durée part de sa création.
+ */
+export function sinceLabel(from: number, now: number, fromCreation = false): string {
   if (now - from < 86_400_000 && new Date(from).toDateString() === new Date(now).toDateString()) {
-    return t('dur.sinceTime', { time: new Intl.DateTimeFormat(locale(), { timeStyle: 'short' }).format(from) });
+    const time = new Intl.DateTimeFormat(locale(), { timeStyle: 'short' }).format(from);
+    return t(fromCreation ? 'dur.createdTime' : 'dur.sinceTime', { time });
   }
-  return t('dur.sinceDate', { date: new Intl.DateTimeFormat(locale(), { dateStyle: 'long' }).format(from) });
+  const date = new Intl.DateTimeFormat(locale(), { dateStyle: 'long' }).format(from);
+  return t(fromCreation ? 'dur.createdDate' : 'dur.sinceDate', { date });
 }

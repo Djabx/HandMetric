@@ -2,6 +2,8 @@ export type Polarity = 'good' | 'bad' | 'neutral';
 export type DisplayMode = 'abstinence' | 'frequency';
 export type GoalKind = 'max' | 'min';
 export type Period = 'day' | 'week' | 'month';
+/** Périodes d'affichage : celles des objectifs, plus l'année. */
+export type ChartPeriod = Period | 'year';
 
 export interface SyncMeta {
   created_at: string;

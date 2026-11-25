@@ -106,6 +106,7 @@ export async function refresh(notify = true) {
     db.call('listDeletedTrackers'),
   ]);
   app.deleted = deleted;
+  clock.now = Date.now(); // l'horloge ne tique que toutes les 15 s : un compteur tout juste créé doit déjà être « dans le passé »
   app.trackers = trackers;
   app.archived = all.filter((t) => t.archived_at);
   app.fields = fields;
