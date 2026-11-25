@@ -523,6 +523,6 @@ Décidé (revue du 2026-11-25) :
 - **CSV** : export simple en v1, import avec choix des colonnes plus tard (section 8.1).
 - Licence MIT.
 
-Encore ouvert :
+Standards de données :
 
-- **Correspondance avec les standards santé.** Il n'existe pas de standard pour des « événements de vie » en général. Les plus proches couvrent la santé : **HL7 FHIR** (ressource `Observation`, codes **LOINC**, très complet mais lourd), **Open mHealth** (schémas JSON simples, ex. `blood-pressure`), et les types d'Apple Santé ou de Google Health Connect (propriétaires, mais standards de fait). Proposition 🟡 : garder notre format, utiliser les unités UCUM dès la v1, et permettre plus tard d'associer un champ à un code LOINC (ex. systolique = `8480-6`) pour exporter en FHIR ou Open mHealth si besoin.
+- **Correspondance avec les standards santé.** Il n'existe pas de standard pour des « événements de vie » en général. Les plus proches couvrent la santé : **HL7 FHIR** (ressource `Observation`, codes **LOINC**, très complet mais lourd), **Open mHealth** (schémas JSON simples, ex. `blood-pressure`), et les types d'Apple Santé ou de Google Health Connect (propriétaires, mais standards de fait). **Décidé** : garder notre format, utiliser les unités UCUM dès la v1, et permettre plus tard d'associer un champ à un code LOINC (ex. systolique = `8480-6`) pour exporter en FHIR ou Open mHealth si besoin.
