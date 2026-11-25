@@ -6,10 +6,24 @@
   import { download, stamp } from '../../lib/io/download';
   import { APP_VERSION, TRASH_DAYS } from '../../lib/db/store';
   import SyncPanel from '../components/SyncPanel.svelte';
+  import { sync } from '../../lib/sync/sync.svelte';
 
   let busy = $state(false);
-  const purgeDate = (deletedAt: string) => new Date(Date.parse(deletedAt) + TRASH_DAYS * 86_400_000).toISOString();
   let persisted = $state<boolean | null>(null);
+  const host = location.host;
+  /** Où sont les données : seulement ce navigateur, ou aussi le serveur. */
+  const storageMessage = $derived(
+    !app.persistent
+      ? t('settings.storage.memory')
+      : sync.mode === 'server' && sync.user
+        ? t('settings.storage.synced', { host })
+        : sync.mode === 'server'
+          ? t('settings.storage.signedOut', { host })
+          : persisted === false
+            ? t('settings.storage.notPersisted')
+            : t('settings.storage.ok'),
+  );
+  const purgeDate = (deletedAt: string) => new Date(Date.parse(deletedAt) + TRASH_DAYS * 86_400_000).toISOString();
   $effect(() => {
     navigator.storage?.persisted?.().then((p) => (persisted = p));
   });
@@ -69,8 +83,8 @@
   <section class="section">
     <h2>{t('settings.data')}</h2>
     <div class="card">
-      <p class="banner" class:warn={!app.persistent || persisted === false} style="margin-top:0">
-        {!app.persistent ? t('settings.storage.memory') : persisted === false ? t('settings.storage.notPersisted') : t('settings.storage.ok')}
+      <p class="banner" class:warn={!app.persistent || (sync.mode === 'server' ? !sync.user : persisted === false)} style="margin-top:0">
+        {storageMessage}
       </p>
       <h3>{t('settings.export')}</h3>
       <div class="row">
@@ -164,7 +178,7 @@
   <section class="section" id="about">
     <h2>{t('settings.about')}</h2>
     <p class="small muted">
-      {t('app.tagline')}<br />
+      {t('app.tagline')} <a href="#/about">{t('about.more')}</a><br />
       {t('settings.version', { v: APP_VERSION })} · <a href="https://github.com/Djabx/lifelog" target="_blank" rel="noopener">{t('settings.source')}</a> · MIT
     </p>
   </section>

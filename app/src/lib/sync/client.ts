@@ -171,6 +171,14 @@ function schedule(ms = 1500) {
 
 /** Démarre la synchronisation si la PWA est servie par un serveur LifeLog. */
 export async function startSync(): Promise<void> {
+  try {
+    await detect();
+  } finally {
+    sync.checked = true;
+  }
+}
+
+async function detect(): Promise<void> {
   if (typeof __LIFELOG_MODE__ !== 'undefined' && __LIFELOG_MODE__ === 'solo') return;
   try {
     const res = await fetch('/api/v1/health', { credentials: 'same-origin' });

@@ -21,6 +21,8 @@ export interface Identity {
 /** État de la synchronisation (rempli par le client de sync en mode auto-hébergé). */
 export const sync = $state({
   mode: 'solo' as 'solo' | 'server',
+  /** Détection du serveur et de la session terminée (évite d'afficher l'accueil puis la connexion). */
+  checked: false,
   health: null as Health | null,
   online: typeof navigator === 'undefined' ? true : navigator.onLine,
   status: 'idle' as 'idle' | 'syncing' | 'error',

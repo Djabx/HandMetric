@@ -4,7 +4,7 @@
 
 listen = "127.0.0.1:8080"                  # LIFELOG_LISTEN
 public_url = "https://lifelog.exemple.fr"  # LIFELOG_PUBLIC_URL (passkeys et retours OIDC)
-database_url = "postgres://lifelog@/lifelog?host=/run/postgresql"  # ou "sqlite:///var/lib/lifelog/lifelog.db?mode=rwc"
+database_url = "postgres:///lifelog?host=/run/postgresql&user=lifelog"  # ou "sqlite:///var/lib/lifelog/lifelog.db?mode=rwc"
 timezone = "Europe/Paris"                  # webhooks reçus sans décalage horaire
 # static_dir = "/chemin/vers/la/pwa"       # déjà réglé par le paquet Nix
 

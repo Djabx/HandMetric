@@ -7,6 +7,9 @@
   import TrackerDetail from './ui/screens/TrackerDetail.svelte';
   import TrackerForm from './ui/screens/TrackerForm.svelte';
   import Settings from './ui/screens/Settings.svelte';
+  import About from './ui/screens/About.svelte';
+  import Login from './ui/screens/Login.svelte';
+  import { sync } from './lib/sync/sync.svelte';
   import Toasts from './ui/components/Toasts.svelte';
   import { startSync } from './lib/sync/client';
 
@@ -22,10 +25,14 @@
   void init().then(() => startSync());
 </script>
 
-{#if !app.ready}
+{#if !app.ready || (!app.error && !sync.checked)}
   <div class="page"><p class="muted" style="padding-top:40px;text-align:center">{t('common.loading')}</p></div>
 {:else if app.error}
   <div class="page"><p class="banner warn" style="margin-top:40px">{app.error}</p></div>
+{:else if router.route.name === 'about'}
+  <About />
+{:else if sync.mode === 'server' && !sync.user}
+  <Login />
 {:else if router.route.name === 'tracker'}
   {#key router.route.id}<TrackerDetail id={router.route.id} />{/key}
 {:else if router.route.name === 'edit'}
