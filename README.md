@@ -14,7 +14,7 @@ LifeLog est une application web progressive (PWA) qui permet de suivre des évé
 
 1. **Local d'abord.** L'application fonctionne entièrement hors ligne, sans compte ni serveur. Les données vivent sur l'appareil.
 2. **Tes données t'appartiennent.** Export en un clic dans un fichier SQLite lisible par n'importe quel outil, et réimport sans perte.
-3. **Serveur optionnel.** Un serveur auto-hébergé (en Rust) permet de sauvegarder et de synchroniser plusieurs appareils. Il accepte PostgreSQL ou SQLite comme stockage.
+3. **Serveur optionnel.** Un serveur auto-hébergé (en Rust) permet de sauvegarder et de synchroniser plusieurs appareils. Il accepte PostgreSQL ou SQLite comme stockage. Connexion par passkey ou SSO (OpenID Connect), sans mot de passe.
 4. **Simple à enregistrer.** Noter un événement doit prendre un seul geste depuis l'écran d'accueil.
 
 ## État du projet
