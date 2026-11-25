@@ -2,7 +2,7 @@
   import { app } from '../../lib/state.svelte';
   import { db } from '../../lib/db/client';
   import { t } from '../../lib/i18n/index.svelte';
-  import { back, go } from '../../lib/router.svelte';
+  import { back, go, replace } from '../../lib/router.svelte';
   import { PALETTE, TEMPLATES } from '../../lib/templates';
   import EmojiPicker from '../components/EmojiPicker.svelte';
   import UnitInput from '../components/UnitInput.svelte';
@@ -63,7 +63,7 @@
         $state.snapshot(fields).map((f) => ({ id: f.id, name: f.name, unit: f.unit || null })),
       );
       if (existing) back();
-      else location.replace(`#/t/${tr.id}`);
+      else replace(`t/${tr.id}`);
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err));
     } finally {
@@ -82,7 +82,7 @@
     const { id, name } = existing;
     await db.write('deleteTracker', id);
     toast(t('form.deleted', { name }), { icon: '🗑️', action: { label: t('common.undo'), run: () => void db.write('restoreTracker', id) } }, 8000);
-    location.replace('#/');
+    replace('');
   }
 </script>
 
@@ -97,9 +97,9 @@
       <h2 id="tpl-title">{t('form.templates')}</h2>
       <p class="small muted">{t('form.templatesHelp')}</p>
       <div class="row">
-        <a class="btn small" href="#/new" aria-current={!template}>✏️ {t('form.templateBlank')}</a>
+        <a class="btn small" href="#/new" aria-current={!template} onclick={(e) => { e.preventDefault(); replace('new'); }}>✏️ {t('form.templateBlank')}</a>
         {#each TEMPLATES as tp (tp.id)}
-          <a class="btn small" href="#/new/{tp.id}" aria-current={template === tp.id}>{tp.icon} {t(tp.name)}</a>
+          <a class="btn small" href="#/new/{tp.id}" aria-current={template === tp.id} onclick={(e) => { e.preventDefault(); replace(`new/${tp.id}`); }}>{tp.icon} {t(tp.name)}</a>
         {/each}
       </div>
     </section>
