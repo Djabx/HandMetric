@@ -7,6 +7,9 @@
   import { toast } from '../../lib/state.svelte';
   import { hashParams } from '../../lib/router.svelte';
 
+  /** Phrase d'invitation : inutile sur l'écran de connexion, qui a déjà la sienne. */
+  let { intro = true }: { intro?: boolean } = $props();
+
   let busy = $state(false);
   let displayName = $state('');
   let authError = $state(hashParams().get('auth_error') ?? '');
@@ -27,7 +30,7 @@
 
 <div class="card stack">
   {#if authError}<p class="banner warn" style="margin:0">{authError}</p>{/if}
-  <p style="margin:0">{t('sync.signedOut')}</p>
+  {#if intro}<p style="margin:0">{t('sync.signedOut')}</p>{/if}
   <!-- Le fournisseur d'identité d'abord : c'est la voie normale sur un serveur qui en a un. -->
   {#each sync.health?.auth.oidc ?? [] as p (p.id)}
     <a class="btn primary" href="/auth/oidc/{p.id}/start">🔐 {t('sync.signInWith', { name: p.name })}</a>
