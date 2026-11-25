@@ -3,8 +3,9 @@
   import { db } from '../../lib/db/client';
   import { t } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
-  import { PALETTE, TEMPLATES, UNIT_SUGGESTIONS } from '../../lib/templates';
+  import { PALETTE, TEMPLATES } from '../../lib/templates';
   import EmojiPicker from '../components/EmojiPicker.svelte';
+  import UnitInput from '../components/UnitInput.svelte';
   import { toast } from '../../lib/state.svelte';
   import type { DisplayMode, GoalKind, Period, Polarity } from '../../lib/types';
 
@@ -162,15 +163,12 @@
         <span>{t('form.fields')}</span>
         <span class="small muted" style="font-weight:400">{t('form.fieldsHelp')}</span>
         {#each fields as f, i (i)}
-          <div class="row">
-            <input class="grow" type="text" bind:value={f.name} placeholder={t('form.fieldName')} aria-label={t('form.fieldName')} style="width:auto" />
-            <input type="text" bind:value={f.unit} list="units" placeholder={t('form.fieldUnit')} aria-label={t('form.fieldUnit')} style="width:110px" />
+          <div class="field-row">
+            <input type="text" bind:value={f.name} placeholder={t('form.fieldName')} aria-label={t('form.fieldName')} />
+            <UnitInput bind:value={f.unit} />
             <button type="button" class="icon-btn" aria-label={t('common.delete')} onclick={() => fields.splice(i, 1)}>✕</button>
           </div>
         {/each}
-        <datalist id="units">
-          {#each UNIT_SUGGESTIONS as u (u)}<option value={u}></option>{/each}
-        </datalist>
         <div><button type="button" class="btn small" onclick={() => fields.push({ id: undefined, name: '', unit: '' })}>＋ {t('form.addField')}</button></div>
       </div>
 
@@ -190,11 +188,11 @@
 </div>
 
 <style>
+  .field-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: start; }
   .templates { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 16px; padding: 12px 14px; margin-bottom: 20px; }
   .templates h2 { margin: 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
   .templates p { margin: 4px 0 10px; }
   a.btn[aria-current='true'] { border-color: var(--accent); outline: 2px solid var(--accent); }
-  a.btn[aria-current='true'] { border-color: var(--accent); }
   .swatch { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--bg); outline: 1px solid var(--border); cursor: pointer; }
   .swatch[aria-pressed='true'] { outline: 3px solid var(--text); }
   a.btn { text-decoration: none; color: inherit; }

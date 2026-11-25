@@ -1,4 +1,6 @@
 import type { Key } from './i18n/fr';
+import { t } from './i18n/index.svelte';
+import { ALL_UNITS } from './catalog';
 import type { DisplayMode, GoalKind, Period, Polarity } from './types';
 
 export interface Template {
@@ -34,10 +36,10 @@ export const TEMPLATES: Template[] = [
   { id: 'reading', name: 'tpl.reading', icon: '📚', color: '#0090ff', polarity: 'good', display_mode: 'frequency', fields: [{ name: 'tpl.pages', unit: '{page}' }] },
 ];
 
-export const UNIT_SUGGESTIONS = ['km', 'm', 'min', 'h', 's', 'kg', 'g', 'L', 'mL', 'mm[Hg]', 'kcal', '/min', '%'];
-
-/** Affichage lisible d'une unité UCUM. */
+/** Affichage lisible d'une unité UCUM (« mm[Hg] » → « mmHg », « {steps} » → « pas »). */
 export function unitLabel(u: string | null): string {
   if (!u) return '';
-  return u.replace('mm[Hg]', 'mmHg').replace('[', '').replace(']', '');
+  const def = ALL_UNITS.find((d) => d.code === u);
+  if (def?.label) return def.label.startsWith('unit.') ? t(def.label as Key) : def.label;
+  return u.replace(/[[\]{}]/g, '');
 }
