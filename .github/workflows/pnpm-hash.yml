@@ -30,5 +30,6 @@ jobs:
           git push
           # Un push fait avec GITHUB_TOKEN ne relance pas la CI : on la relance explicitement.
           gh workflow run ci.yml --ref "${{ github.head_ref }}"
+          gh workflow run nix.yml --ref "${{ github.head_ref }}"
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,65 @@
+# Vérifie le packaging Nix (flake, hash pnpm, vendoring Cargo).
+# Les tests et le build de l'app et du serveur tournent déjà dans ci.yml :
+# ce job ne se lance que si un fichier qui influence le packaging change.
+name: Nix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - flake.nix
+      - flake.lock
+      - nix/**
+      - app/package.json
+      - app/pnpm-lock.yaml
+      - app/pnpm-workspace.yaml
+      - app/vite.config.ts
+      - server/Cargo.toml
+      - server/Cargo.lock
+      - .github/workflows/nix.yml
+  pull_request:
+    paths:
+      - flake.nix
+      - flake.lock
+      - nix/**
+      - app/package.json
+      - app/pnpm-lock.yaml
+      - app/pnpm-workspace.yaml
+      - app/vite.config.ts
+      - server/Cargo.toml
+      - server/Cargo.lock
+      - .github/workflows/nix.yml
+  workflow_dispatch:
+
+# Une nouvelle poussée sur la même PR annule le build en cours.
+concurrency:
+  group: nix-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: write # purge des anciens caches
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v32
+        with:
+          extra_nix_config: |
+            keep-outputs = true
+            keep-env-derivations = true
+      # Garde le store Nix entre deux exécutions (dépendances pnpm, crates
+      # vendorisées, toolchain…) : seul ce qui a changé est reconstruit.
+      - uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock', 'nix/**', 'app/pnpm-lock.yaml', 'server/Cargo.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 3G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: P7D
+          purge-primary-key: never
+      - run: nix flake check -L
