@@ -2,7 +2,7 @@
 
 *Statut : brouillon, 2026-11-25.*
 
-Les points marqués **🟡 Hypothèse** sont des choix faits par défaut, sans validation. Ils sont à confirmer ou à changer. La liste complète est reprise en [section 10](#10-questions-ouvertes).
+Les points marqués **🟡 Hypothèse** sont des choix faits par défaut, à confirmer. Les décisions déjà prises et les questions encore ouvertes sont en [section 10](#10-décisions-et-questions-ouvertes).
 
 ---
 
@@ -26,10 +26,14 @@ Contraintes fondatrices :
 
 ## 2. Utilisateurs et cas d'usage
 
-- **Utilisateur solo, sans serveur** : installe la PWA, suit ses compteurs, exporte de temps en temps une sauvegarde.
-- **Utilisateur auto-hébergé** (Alex) : même usage, avec synchronisation automatique entre téléphone et ordinateur via son serveur.
+Il existe deux façons d'utiliser LifeLog, chacune avec **son propre front** :
 
-🟡 **Hypothèse** : un serveur sert **un seul utilisateur** (ou un foyer qui partage un compte). Le multi-utilisateur avec comptes séparés n'est pas prévu en v1, mais le modèle de données prévoit une colonne `owner_id` côté serveur pour ne pas le bloquer.
+- **Mode solo** : la PWA publiée sur **GitHub Pages**, accessible à tout le monde. Aucun serveur, aucun compte. Les données restent sur l'appareil, et on exporte de temps en temps une sauvegarde.
+- **Mode auto-hébergé** : un serveur LifeLog (par exemple sur le NUC d'Alex) sert **sa propre PWA** et synchronise les appareils. Un serveur accueille **plusieurs utilisateurs**, chacun avec ses données, connectés par SSO ou passkey (voir 5.5).
+
+Un front n'est jamais branché sur le backend d'un autre (pas de CORS). Pour passer du mode solo au mode auto-hébergé, on exporte ses données depuis la version GitHub Pages et on les importe dans la PWA du serveur.
+
+LifeLog est une **application pour soi**, pas une vitrine : rien n'est partagé ni publié.
 
 ## 3. Fonctionnalités
 
@@ -68,24 +72,30 @@ Contraintes fondatrices :
 - Import d'un fichier exporté, avec fusion sans doublon.
 - Fonctionnement 100 % hors ligne après la première visite. Installable sur l'écran d'accueil.
 
-**Synchronisation (si un serveur est configuré)**
-- Saisir l'URL du serveur et se connecter par passkey ou SSO (voir 5.5).
+**Objectifs**
+- Optionnels, sur n'importe quel compteur, bon ou mauvais : « au plus 5 cigarettes par semaine », « au moins 3 courses par semaine ».
+- Affichage de la progression sur la période en cours, et succès liés (« 4 semaines d'affilée dans l'objectif »).
+
+**Interface**
+- Français et anglais dès la v1, avec la langue du navigateur par défaut.
+
+**Synchronisation (mode auto-hébergé uniquement)**
+- Se connecter par passkey ou SSO (voir 5.5) sur la PWA servie par le serveur.
 - Synchronisation automatique au démarrage, au retour en ligne, et après chaque modification (avec un délai de regroupement).
 
 ### 3.2 Plus tard (hors v1)
 
 - Paliers de succès personnalisés par compteur.
-- Objectifs (« max 5 cigarettes / semaine », « 3 courses / semaine »).
 - Rappels et notifications push (nécessite le serveur pour le Web Push).
 - Raccourcis : actions rapides de l'icône d'app, widget, Share Target.
 - Étiquettes / catégories de compteurs.
-- Multi-utilisateur sur un même serveur.
 - Import depuis d'autres applis (CSV générique).
-- Intégrations tierces : Strava, fichiers GPX/FIT (voir [section 8](#8-intégrations-futures)).
+- Sources de données tierces, en entrée uniquement : Strava, fichiers GPX/FIT (voir [section 8](#8-intégrations-futures)).
 
 ### 3.3 Hors périmètre
 
-- Réseau social, partage public, classements.
+- Réseau social, partage public, classements, publication vers d'autres services. LifeLog est une appli « pour soi ».
+- Intégrations sortantes : les services tiers ne sont que des **sources** de données.
 - Toute dépendance à un service tiers (analytics, cloud propriétaire).
 
 ## 4. Modèle de données
@@ -117,6 +127,9 @@ CREATE TABLE tracker (
   polarity     TEXT NOT NULL CHECK (polarity IN ('good','bad','neutral')),
   display_mode TEXT NOT NULL CHECK (display_mode IN ('abstinence','frequency')),
   value_unit   TEXT,                      -- NULL = pas de valeur numérique
+  goal_kind    TEXT CHECK (goal_kind IN ('max','min')),  -- NULL = pas d'objectif
+  goal_count   INTEGER,                   -- ex. 5
+  goal_period  TEXT CHECK (goal_period IN ('day','week','month')),
   sort_order   REAL NOT NULL DEFAULT 0,
   archived_at  TEXT,
   created_at   TEXT NOT NULL,
@@ -147,7 +160,7 @@ CREATE TABLE sync_state (
 );
 ```
 
-🟡 **Hypothèse** : pas de table `achievement`. Les succès sont dérivés des événements et des paliers (voir 4.3). Si on veut un jour mémoriser « vu / pas vu » pour les notifications, ce sera une table locale non synchronisée.
+**Décidé** : pas de table `achievement`. Les succès sont dérivés des événements et des paliers (voir 4.3). Si on veut un jour mémoriser « vu / pas vu » pour les notifications, ce sera une table locale non synchronisée.
 
 ### 4.3 Succès et statistiques : calculés, pas stockés
 
@@ -168,10 +181,43 @@ Mêmes tables, avec ces différences :
 |---|---|---|
 | `id`, `tracker_id` | `TEXT` | `UUID` |
 | dates | `TEXT` ISO 8601 | `TIMESTAMPTZ` (sauf `updated_at` : `TEXT` HLC) |
-| en plus | | `owner_id UUID NOT NULL` |
+| en plus | | `user_id UUID NOT NULL REFERENCES app_user(id)` |
 | en plus | | `server_seq BIGINT` (séquence globale, mise à jour à chaque écriture) |
 
-Le backend SQLite du serveur reprend le schéma client, avec `owner_id` et `server_seq` en plus.
+Tables propres au serveur, jamais exportées :
+
+```sql
+CREATE TABLE app_user (
+  id           UUID PRIMARY KEY,
+  display_name TEXT,
+  created_at   TIMESTAMPTZ NOT NULL
+);
+
+-- Une ligne par moyen de connexion lié au compte
+CREATE TABLE identity (
+  id           UUID PRIMARY KEY,
+  user_id      UUID NOT NULL REFERENCES app_user(id),
+  kind         TEXT NOT NULL CHECK (kind IN ('oidc','passkey')),
+  provider     TEXT,             -- nom du fournisseur OIDC dans la config
+  subject      TEXT,             -- claim `sub` OIDC
+  credential   BYTEA,            -- clé publique WebAuthn
+  created_at   TIMESTAMPTZ NOT NULL,
+  UNIQUE (provider, subject)
+);
+
+CREATE TABLE api_token (
+  id           UUID PRIMARY KEY,
+  user_id      UUID NOT NULL REFERENCES app_user(id),
+  name         TEXT NOT NULL,
+  token_hash   TEXT NOT NULL,    -- seul le hash est stocké
+  scopes       TEXT[] NOT NULL,  -- ex. {events:write}, {export:read}
+  tracker_id   UUID,             -- jeton limité à un compteur (webhook)
+  created_at   TIMESTAMPTZ NOT NULL,
+  last_used_at TIMESTAMPTZ
+);
+```
+
+Le backend SQLite du serveur reprend le même schéma, avec les types SQLite.
 
 ## 5. Export, import et synchronisation
 
@@ -195,7 +241,7 @@ Le backend SQLite du serveur reprend le schéma client, avec `owner_id` et `serv
 }
 ```
 
-🟡 **Hypothèse** : le CSV n'est pas un format d'échange (il perd les relations). Il pourra venir plus tard comme export « lecture seule » pour tableur.
+Le CSV n'est pas un format d'échange entre instances LifeLog (il perd les relations). Son rôle est discuté en section 10.
 
 ### 5.2 Résolution des conflits
 
@@ -209,7 +255,7 @@ Pourquoi c'est suffisant ici :
 - Les événements sont essentiellement en **ajout seul**. Deux appareils qui ajoutent chacun un événement ne sont jamais en conflit (UUID différents).
 - Les vrais conflits (renommer le même compteur sur deux appareils hors ligne) sont rares, et « le plus récent gagne » est le comportement attendu.
 
-🟡 **Hypothèse** : pas de CRDT ni de fusion champ par champ. Ce serait plus complexe pour un gain quasi nul vu l'usage.
+**Décidé** : pas de CRDT ni de fusion champ par champ. Ce serait plus complexe pour un gain quasi nul vu l'usage.
 
 ### 5.3 Import d'un fichier
 
@@ -232,6 +278,8 @@ API HTTP JSON, versionnée sous `/api/v1`. Authentification décrite en 5.5.
 | `POST` | `/api/v1/changes` | Envoi d'un lot de lignes modifiées. Le serveur applique la règle 5.2 et renvoie le nouveau `cursor` |
 | `POST` | `/api/v1/import` | Envoi d'un fichier `.lifelog.sqlite` ou JSON (multipart). Même fusion que `changes` |
 | `GET` | `/api/v1/export?format=sqlite\|json` | Télécharge toutes les données du compte |
+| `POST` | `/api/v1/trackers/{id}/events` | Ajoute un événement (corps facultatif : `occurred_at`, `value`, `note`). Pour les scripts. |
+| `POST` | `/hooks/{token}` | **Webhook entrant** : ajoute un événement au compteur lié au jeton. Aucun en-tête requis, pour les outils qui ne savent faire qu'un simple POST. |
 
 Cycle client :
 1. **Push** : envoyer les lignes dont `updated_at` est postérieur au dernier push réussi.
@@ -239,24 +287,16 @@ Cycle client :
 
 Le serveur n'a aucune logique métier (pas de calcul de succès). Il stocke, fusionne et redistribue.
 
+**Pousser des événements depuis l'extérieur.** Un jeton d'API limité à un compteur donne une URL de webhook, par exemple `https://lifelog.exemple.fr/hooks/lt_9f3a…`. Exemples d'usage : un raccourci iOS ou Android « J'ai fumé » sur l'écran d'accueil, une automatisation Home Assistant, un bouton NFC, un `curl` dans un script. L'événement créé passe par la même fusion que la sync, et arrive sur les appareils au prochain pull.
+
 ### 5.5 Authentification (mode serveur)
 
-**Pas d'identifiant ni de mot de passe.** Le mode hors ligne n'a aucune authentification. En mode serveur, deux méthodes, au choix de celui qui héberge :
+**Pas d'identifiant ni de mot de passe.** Le mode solo n'a aucune authentification. En mode auto-hébergé, deux méthodes, cumulables :
 
 1. **Passkeys (WebAuthn)**, méthode par défaut. Rien à configurer côté hébergeur. Le serveur stocke uniquement des clés publiques. Bibliothèque Rust : `webauthn-rs`.
-2. **SSO via OpenID Connect générique.** Le serveur ne connaît pas « Google » ou « GitHub » en dur : il accepte n'importe quel fournisseur OIDC décrit dans sa configuration (URL de l'émetteur, `client_id`, `client_secret`). Bibliothèque Rust : `openidconnect`.
+2. **SSO via OpenID Connect générique**, avec **autant de fournisseurs que voulu** (Google, Facebook, un IdP perso…). Le serveur ne connaît aucun fournisseur en dur : chacun est décrit dans la configuration (URL de l'émetteur, `client_id`, fichier du `client_secret`). Bibliothèque Rust : `openidconnect`.
 
-```toml
-# lifelog.toml (exemple)
-[auth.passkey]
-enabled = true
-
-[[auth.oidc]]
-name          = "Google"
-issuer        = "https://accounts.google.com"
-client_id     = "…"
-client_secret = "…"
-```
+Toute la configuration passe par le module NixOS (voir 6.4) ou, hors Nix, par des variables d'environnement et un fichier TOML. Il n'y a **aucun écran d'administration** dans l'interface.
 
 Fournisseurs possibles :
 
@@ -264,16 +304,20 @@ Fournisseurs possibles :
 |---|---|
 | **Google** | Créer un « client OAuth » dans Google Cloud Console (gratuit, environ 10 min) et y déclarer l'URL de retour `https://<serveur>/auth/oidc/callback`. Pas de validation Google nécessaire tant qu'on ne demande que `openid email profile`. |
 | **GitHub, Microsoft, GitLab** | Même principe : enregistrer une application, copier les identifiants. |
-| **Facebook** | Déconseillé : OIDC partiel, validation d'app et contraintes de confidentialité lourdes pour un usage perso. |
+| **Facebook** | Possible, mais plus pénible : support OIDC partiel (« Limited Login »), et l'app Facebook doit être validée pour d'autres comptes que le sien. |
 | **IdP auto-hébergé** (Pocket ID, Authelia, Authentik, Keycloak) | Idéal sur un NUC : un seul compte pour tous ses services. Pocket ID fait du passkey uniquement. |
 
 Fonctionnement :
-- Le premier compte qui se connecte devient le propriétaire du serveur. Les inscriptions sont ensuite fermées, sauf invitation (🟡 **Hypothèse**).
-- Après connexion, le serveur ouvre une session (cookie `HttpOnly`, `Secure`, `SameSite=Strict` si la PWA est servie par le serveur, sinon un jeton de session stocké par la PWA).
+- **Pas de rôle « propriétaire » ni d'administrateur.** Tous les comptes sont égaux. Le serveur se pilote uniquement par sa configuration.
+- **Création de comptes** : une première connexion réussie crée le compte, si l'inscription est ouverte. On contrôle qui peut s'inscrire par la configuration :
+  - `registration.enabled = false` ferme toute nouvelle inscription ;
+  - `allowRegistration` par fournisseur OIDC limite les inscriptions à une population (par exemple, seulement les comptes de son IdP perso, alors que Google sert à se connecter à un compte existant) ;
+  - une passkey seule ne crée un compte que si l'inscription par passkey est ouverte. Sinon, on l'ajoute depuis un compte déjà connecté.
+- Après connexion, le serveur ouvre une session par cookie (`HttpOnly`, `Secure`, `SameSite=Strict`).
 - Plusieurs passkeys et identités OIDC peuvent être liées au même compte (téléphone, ordinateur, Google…).
-- Un **jeton d'API** peut être créé depuis l'interface pour des scripts (export automatisé, sauvegarde).
+- Chaque utilisateur peut créer des **jetons d'API** depuis l'interface : pour la sauvegarde automatisée (`export:read`) et pour **pousser des événements** (`events:write`, webhook, voir 5.4).
 
-🟡 **Hypothèse** : la PWA est servie par le serveur lui-même quand on l'utilise en mode serveur (même origine), ce qui simplifie cookies et passkeys. Une PWA hébergée ailleurs (ex. GitHub Pages) qui parle à un serveur perso reste possible, avec CORS et jeton de session.
+**La PWA est toujours servie par son serveur** (même origine). Pas de CORS : la PWA de GitHub Pages ne peut pas se connecter à un serveur auto-hébergé. On migre ses données d'un front à l'autre par export et import.
 
 ## 6. Architecture
 
@@ -307,21 +351,24 @@ server/
 ```rust
 #[async_trait]
 pub trait Storage: Send + Sync {
-    async fn changes_since(&self, owner: OwnerId, cursor: i64, limit: u32) -> Result<ChangeSet>;
-    async fn apply(&self, owner: OwnerId, rows: Vec<Row>) -> Result<Cursor>;
-    async fn export(&self, owner: OwnerId) -> Result<Snapshot>;
+    async fn changes_since(&self, user: UserId, cursor: i64, limit: u32) -> Result<ChangeSet>;
+    async fn apply(&self, user: UserId, rows: Vec<Row>) -> Result<Cursor>;
+    async fn export(&self, user: UserId) -> Result<Snapshot>;
 }
 ```
 
-Configuration par variables d'environnement, par exemple `LIFELOG_DATABASE_URL=postgres://…` ou `sqlite:///data/lifelog.db`. Le schéma d'URL choisit l'implémentation.
+Configuration par variables d'environnement, par exemple `LIFELOG_DATABASE_URL=postgres://…` ou `sqlite:///data/lifelog.db`. Le schéma d'URL choisit l'implémentation. Les réglages structurés (liste des fournisseurs OIDC) vont dans un fichier TOML désigné par `LIFELOG_CONFIG`. Les secrets ne sont jamais écrits en clair : la configuration référence des fichiers (`client_secret_file`), ce qui marche directement avec sops-nix ou agenix.
+
+Le serveur écoute en HTTP sur une adresse locale. Il est prévu pour être placé derrière un reverse proxy (Caddy, nginx) qui gère le TLS. Il fait confiance aux en-têtes `X-Forwarded-*` uniquement venant des proxies déclarés, et il connaît son URL publique (`LIFELOG_PUBLIC_URL`), nécessaire pour les passkeys et les retours OIDC.
 
 Distribution : un module NixOS, un binaire statique et une image Docker (construite par le flake, voir 6.4). Un `docker-compose.yml` d'exemple avec PostgreSQL.
 
 ### 6.3 Redis
 
-🟡 **Hypothèse** : **Redis n'est pas utilisé en v1.** Pour un serveur personnel, PostgreSQL suffit largement (y compris `LISTEN/NOTIFY` si on veut prévenir les autres appareils en direct). Redis pourra servir plus tard, en option, pour :
+**Décidé** : **Redis n'est pas utilisé en v1.** Pour un serveur personnel ou familial, PostgreSQL suffit largement (y compris `LISTEN/NOTIFY` si on veut prévenir les autres appareils en direct). Redis pourra servir plus tard, en option, pour :
 - diffuser les changements en temps réel entre appareils (pub/sub, SSE) si on dépasse un seul processus ;
-- limiter le débit des requêtes si le serveur devient multi-utilisateur.
+- servir de cache de sessions ;
+- limiter le débit des requêtes (webhooks, connexions).
 
 Le code ne doit pas en dépendre : derrière un trait, désactivé par défaut.
 
@@ -344,14 +391,36 @@ Module NixOS, exemple d'usage :
 ```nix
 services.lifelog = {
   enable = true;
-  listen = "127.0.0.1:8080";
+  listen = "127.0.0.1:8080";               # pas d'exposition directe
+  publicUrl = "https://lifelog.exemple.fr";
   database.url = "postgres:///lifelog?host=/run/postgresql";
-  database.createLocally = true;      # crée la base et le rôle PostgreSQL
-  settingsFile = "/run/secrets/lifelog.toml";  # secrets OIDC (sops-nix, agenix…)
+  database.createLocally = true;           # crée la base et le rôle PostgreSQL
+
+  registration.enabled = true;
+  auth.passkey.allowRegistration = false;  # passkey ajoutée depuis un compte existant
+  auth.oidc = {
+    pocket-id = {
+      issuer = "https://id.exemple.fr";
+      clientId = "lifelog";
+      clientSecretFile = config.sops.secrets."lifelog/pocket-id".path;
+      allowRegistration = true;            # seuls les comptes de l'IdP perso s'inscrivent
+    };
+    google = {
+      issuer = "https://accounts.google.com";
+      clientId = "1234.apps.googleusercontent.com";
+      clientSecretFile = config.sops.secrets."lifelog/google".path;
+      allowRegistration = false;           # connexion à un compte existant seulement
+    };
+  };
 };
+
+# Reverse proxy de l'hôte
+services.caddy.virtualHosts."lifelog.exemple.fr".extraConfig = ''
+  reverse_proxy 127.0.0.1:8080
+'';
 ```
 
-Le module crée un service systemd durci (`DynamicUser`, `ProtectSystem=strict`, `StateDirectory`), et avec `createLocally` configure la base dans `services.postgresql`. Le reverse proxy (nginx, Caddy) et le TLS restent à la charge de la configuration de l'hôte.
+Toutes les options du serveur sont exposées par le module, qui génère les variables d'environnement et le fichier TOML. Les secrets passent par sops-nix (ou agenix) via les options `*File`. Le module crée un service systemd durci (`DynamicUser`, `ProtectSystem=strict`, `StateDirectory`), et avec `createLocally` configure la base dans `services.postgresql`. Le reverse proxy et le TLS restent dans la configuration de l'hôte.
 
 🟡 **Hypothèse** : `crane` pour Rust et `rust-overlay` pour la toolchain. Ce sont les choix les plus courants, faciles à changer.
 
@@ -362,6 +431,8 @@ Le module crée un service systemd durci (`DynamicUser`, `ProtectSystem=strict`,
 | Stockage client | **SQLite WASM officiel** (`@sqlite.org/sqlite-wasm`) persisté dans **OPFS** | L'export est le fichier lui-même, sans conversion. Requêtes SQL pour les stats. Même moteur que le backend SQLite. | IndexedDB (Dexie) : il faudrait convertir vers SQLite à l'export, et pas de SQL pour les stats. |
 | Langage client | **TypeScript** | Écosystème PWA mature, typage. | Rust/WASM (Leptos) : séduisant pour partager le code avec le serveur, mais plus lourd à builder et à déboguer, et l'UI reste du DOM. |
 | Framework UI | 🟡 **Svelte 5 + Vite** | Bundle léger (bon pour le hors ligne et les mobiles modestes), réactivité simple pour un compteur qui tique chaque seconde. | React (plus lourd), Solid (écosystème plus petit). Choix réversible à ce stade. |
+| Hébergement mode solo | **GitHub Pages**, déployé par GitHub Actions | Gratuit, statique, aucun serveur à maintenir. | Netlify, Cloudflare Pages (équivalents, mais un compte de plus). |
+| i18n | 🟡 **Paraglide** (inlang) | Traductions typées et compilées, bundle minimal. FR/EN dès la v1. | svelte-i18n (chargé à l'exécution, plus lourd). |
 | PWA | **vite-plugin-pwa** (Workbox) | Manifest et Service Worker générés, stratégie de cache standard. | Service Worker écrit à la main. |
 | Identifiants | **UUIDv7** | Uniques sans serveur, triables dans le temps. | Entiers auto-incrémentés (collisions entre appareils). |
 | Ordre des écritures | **HLC** | Robuste aux horloges décalées des téléphones. | `updated_at` en heure murale (fragile). |
@@ -373,7 +444,7 @@ Le module crée un service systemd durci (`DynamicUser`, `ProtectSystem=strict`,
 
 ### Compatibilité navigateurs
 
-OPFS avec accès synchrone est disponible dans Chrome/Edge 108+, Firefox 111+ et Safari 16.4+ (iOS compris). 🟡 **Hypothèse** : on ne prend pas en charge les navigateurs plus anciens. Repli possible plus tard : SQLite en mémoire + sauvegarde dans IndexedDB.
+OPFS avec accès synchrone est disponible dans Chrome/Edge 108+, Firefox 111+ et Safari 16.4+ (iOS compris). On ne prend pas en charge les navigateurs plus anciens. Repli possible plus tard : SQLite en mémoire + sauvegarde dans IndexedDB.
 
 **Point d'attention iOS** : Safari peut purger les données d'un site non installé après 7 jours sans visite. Il faut inciter à « Ajouter à l'écran d'accueil » et rappeler l'export ou la sync dans l'interface.
 
@@ -398,31 +469,32 @@ D'autres services (Garmin Connect, Google Fit / Health Connect, Apple Santé) su
 
 ## 9. Plan de livraison
 
-1. **Squelette** : monorepo, `flake.nix` (devShell et checks), PWA Vite + Svelte installable, SQLite WASM dans un worker, migrations.
-2. **Cœur hors ligne** : compteurs, événements, tableau de bord, durées.
+1. **Squelette** : monorepo, `flake.nix` (devShell et checks), i18n FR/EN, déploiement GitHub Pages, PWA Vite + Svelte installable, SQLite WASM dans un worker, migrations.
+2. **Cœur hors ligne** : compteurs, événements, tableau de bord, durées, objectifs.
 3. **Stats et succès** : séries, records, paliers, heatmap.
 4. **Export / import** SQLite et JSON, avec tests de fusion (idempotence, commutativité).
-5. **Serveur Rust** : API sync, backends PostgreSQL et SQLite, passkeys puis OIDC, paquet Nix, module NixOS et image Docker.
+5. **Serveur Rust** : multi-utilisateur, API sync, backends PostgreSQL et SQLite, passkeys et OIDC multi-fournisseurs, jetons d'API et webhooks, paquet Nix, module NixOS et image Docker.
 6. **Sync côté PWA** : écran de configuration, cycle push/pull, indicateur d'état.
 
 Les étapes 1 à 4 donnent une application complète utilisable sans serveur.
 
-## 10. Questions ouvertes
+## 10. Décisions et questions ouvertes
 
-Hypothèses à valider (récapitulatif) :
+Décidé (revue du 2026-11-25) :
 
-1. Un serveur = un utilisateur en v1 ?
-2. Pas de table de succès : tout est calculé ?
-3. Last-writer-wins par ligne (pas de CRDT) ?
-4. Premier compte connecté = propriétaire, inscriptions fermées ensuite ?
-5. Redis absent en v1 ?
-6. Svelte comme framework UI ?
-7. Pas de support des navigateurs sans OPFS ?
-8. CSV seulement en export lecture seule, plus tard ?
+- Un serveur accueille **plusieurs utilisateurs**, sans rôle d'administrateur. Tout se règle dans la configuration.
+- Mode solo = PWA sur GitHub Pages. Chaque front ne parle qu'à son propre backend, pas de CORS.
+- Connexion par passkeys et OIDC multi-fournisseurs, jamais de mot de passe.
+- Succès calculés, pas stockés. Fusion last-writer-wins par ligne.
+- Redis absent en v1, envisagé plus tard pour le cache de sessions.
+- Svelte, et pas de support des navigateurs sans OPFS (pas d'objection).
+- Interface en français et en anglais dès la v1.
+- Objectifs (max ou min par période) dès la v1, sur les compteurs bons comme mauvais.
+- Intégrations : sources de données uniquement, rien vers les réseaux sociaux.
+- Jetons d'API et webhooks entrants pour pousser des événements.
+- Licence MIT.
 
-Autres questions :
+Encore ouvert :
 
-- **Langue de l'interface** : français seul, ou français + anglais dès le départ ?
-- **Licence** : open source (MIT, AGPL…) ou privée ?
-- **Événements avec durée** (ex. une course de 45 min) : faut-il un `ended_at`, ou la valeur numérique suffit-elle ?
-- **Compteurs « mauvais » en mode fréquence** (ex. « max 5 cigarettes par jour ») : à prévoir dès la v1 ou avec les objectifs ?
+- **Plusieurs mesures par événement** (« 5 km en 40 min ») : un seul champ `value` couvre « 5 km », « 40 min » ou « 8 h de sommeil », mais pas les deux à la fois. Proposition 🟡 : une table `tracker_field` (nom, unité) et des valeurs par champ dans l'événement, ce qui permettrait aussi de calculer une allure. À trancher avant de figer le schéma v1, car l'import Strava en profiterait.
+- **CSV** : utile surtout en **import**, pour récupérer l'historique d'une autre appli. L'utilisateur choisirait quelle colonne est la date, laquelle est la valeur, etc. Proposition 🟡 : export CSV simple en v1, import CSV avec ce choix de colonnes plus tard.

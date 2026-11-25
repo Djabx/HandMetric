@@ -14,12 +14,19 @@ LifeLog est une application web progressive (PWA) qui permet de suivre des évé
 
 1. **Local d'abord.** L'application fonctionne entièrement hors ligne, sans compte ni serveur. Les données vivent sur l'appareil.
 2. **Tes données t'appartiennent.** Export en un clic dans un fichier SQLite lisible par n'importe quel outil, et réimport sans perte.
-3. **Serveur optionnel.** Un serveur auto-hébergé (en Rust) permet de sauvegarder et de synchroniser plusieurs appareils. Il accepte PostgreSQL ou SQLite comme stockage. Connexion par passkey ou SSO (OpenID Connect), sans mot de passe.
+3. **Serveur optionnel et multi-utilisateur.** Un serveur auto-hébergé (en Rust) permet de sauvegarder et de synchroniser plusieurs appareils. Il accepte PostgreSQL ou SQLite comme stockage. Connexion par passkey ou SSO (OpenID Connect), sans mot de passe.
 4. **Simple à enregistrer.** Noter un événement doit prendre un seul geste depuis l'écran d'accueil.
 
 ## État du projet
 
 🚧 **Phase de conception.** Aucun code pour l'instant. La spécification se trouve dans [`docs/SPEC.md`](docs/SPEC.md).
+
+## Deux façons de l'utiliser
+
+- **Mode solo** : la PWA publiée sur GitHub Pages, sans compte ni serveur.
+- **Mode auto-hébergé** : ton serveur LifeLog sert sa propre PWA et synchronise tes appareils, pour plusieurs utilisateurs.
+
+On passe de l'un à l'autre par export et import.
 
 ## Architecture en bref
 
@@ -64,4 +71,4 @@ flake.nix  Environnement de dev, paquets et module NixOS
 
 ## Licence
 
-À définir.
+[MIT](LICENSE).
