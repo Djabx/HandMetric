@@ -1,10 +1,10 @@
 <script lang="ts">
   import { sync } from '../../lib/sync/sync.svelte';
-  import { api, loadMe, logout, passkeyLogin, passkeyRegister, syncNow } from '../../lib/sync/client';
+  import { api, loadMe, logout, passkeyRegister, syncNow } from '../../lib/sync/client';
   import { supported } from '../../lib/sync/webauthn';
   import { fmtDateTime, fmtRelative, t } from '../../lib/i18n/index.svelte';
   import { app, clock, toast } from '../../lib/state.svelte';
-  import { hashParams } from '../../lib/router.svelte';
+  import SignIn from './SignIn.svelte';
 
   interface TokenInfo {
     id: string;
@@ -16,8 +16,6 @@
   }
 
   let busy = $state(false);
-  let displayName = $state('');
-  let authError = $state(hashParams().get('auth_error') ?? '');
   let tokens = $state<TokenInfo[]>([]);
   let newName = $state('');
   let newScope = $state<TokenInfo['scope']>('webhook');
@@ -26,7 +24,6 @@
 
   async function run(fn: () => Promise<unknown>) {
     busy = true;
-    authError = '';
     try {
       await fn();
     } catch (e) {
@@ -90,23 +87,7 @@
   {#if sync.mode === 'solo'}
     <p class="card small muted" style="margin:0">{t('sync.solo')}</p>
   {:else if !sync.user}
-    <div class="card stack">
-      {#if authError}<p class="banner warn" style="margin:0">{authError}</p>{/if}
-      <p style="margin:0">{t('sync.signedOut')}</p>
-      {#if sync.health?.auth.passkey && supported()}
-        <button class="btn primary" disabled={busy} onclick={() => run(passkeyLogin)}>🔑 {t('sync.signInPasskey')}</button>
-      {/if}
-      {#each sync.health?.auth.oidc ?? [] as p (p.id)}
-        <a class="btn" href="/auth/oidc/{p.id}/start">{t('sync.signInWith', { name: p.name })}</a>
-      {/each}
-      {#if sync.health?.auth.passkey_registration && supported()}
-        <hr />
-        <div class="row">
-          <input class="grow" type="text" bind:value={displayName} placeholder={t('form.name')} aria-label={t('form.name')} style="width:auto" />
-          <button class="btn" disabled={busy} onclick={() => run(() => passkeyRegister(displayName))}>{t('sync.signUpPasskey')}</button>
-        </div>
-      {/if}
-    </div>
+    <SignIn />
   {:else}
     <div class="card stack">
       <div class="row">
@@ -199,6 +180,5 @@
   .stack { display: grid; gap: 10px; }
   a.btn { text-decoration: none; color: inherit; }
   h3 { font-size: 1rem; margin: 16px 0 8px; }
-  hr { border: 0; border-top: 1px solid var(--border); width: 100%; margin: 4px 0; }
   .secret { display: block; word-break: break-all; padding: 8px; border-radius: 8px; background: var(--surface); user-select: all; }
 </style>
