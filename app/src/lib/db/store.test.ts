@@ -125,4 +125,44 @@ describe('Store', () => {
     expect(b.listEvents(t.id)).toHaveLength(1);
     expect(b.getTracker(t.id)?.name).toBe('Cigarette');
   });
+
+  it('supprime définitivement depuis la corbeille et propage la purge', async () => {
+    const a = await newStore();
+    const b = await newStore();
+    const t = a.saveTracker(
+      { name: 'Tension', icon: '🩺', color: null, polarity: 'neutral', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null },
+      [{ name: 'Systole', unit: 'mm[Hg]' }],
+    );
+    const [f] = a.listFields(t.id);
+    a.saveEvent({ tracker_id: t.id, measures: { [f.id]: 12 }, note: 'secret' });
+    b.merge(a.snapshot());
+    a.deleteTracker(t.id);
+    expect(a.listDeletedTrackers()).toHaveLength(1);
+    a.purgeTracker(t.id);
+    expect(a.listDeletedTrackers()).toHaveLength(0);
+    a.restoreTracker(t.id);
+    expect(a.listTrackers()).toHaveLength(0);
+    b.merge(a.changesSince(''));
+    expect(b.listTrackers()).toHaveLength(0);
+    expect(b.listDeletedTrackers()).toHaveLength(0);
+    const dump = JSON.stringify(b.snapshot());
+    expect(dump).not.toContain('Tension');
+    expect(dump).not.toContain('Systole');
+    expect(dump).not.toContain('secret');
+  });
+
+  it('vide la corbeille après 30 jours', async () => {
+    const s = await newStore();
+    const mk = (name: string) =>
+      s.saveTracker({ name, icon: null, color: null, polarity: 'good', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null });
+    const old = mk('Ancien');
+    const recent = mk('Récent');
+    s.deleteTracker(old.id);
+    s.deleteTracker(recent.id);
+    const in31days = Date.now() + 31 * 86_400_000;
+    expect(s.purgeExpiredTrash(30, Date.now() + 10 * 86_400_000)).toBe(0);
+    expect(s.purgeExpiredTrash(30, in31days)).toBe(2);
+    expect(s.listDeletedTrackers()).toHaveLength(0);
+    expect(s.purgeExpiredTrash(30, in31days)).toBe(0);
+  });
 });

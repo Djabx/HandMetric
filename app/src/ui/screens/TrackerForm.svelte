@@ -180,14 +180,22 @@
   {/key}
 
   {#if existing}
-    <div class="row section">
-      <button class="btn" onclick={archive}>{existing.archived_at ? t('form.unarchive') : t('form.archive')}</button>
-      <button class="btn danger" onclick={remove}>{t('form.deleteTracker')}</button>
+    <div class="section actions">
+      <div class="action">
+        <button class="btn" onclick={archive}>📦 {existing.archived_at ? t('form.unarchive') : t('form.archive')}</button>
+        <p class="small muted">{existing.archived_at ? t('form.unarchiveHelp') : t('form.archiveHelp')}</p>
+      </div>
+      <div class="action">
+        <button class="btn danger" onclick={remove}>🗑️ {t('form.deleteTracker')}</button>
+        <p class="small muted">{t('form.deleteHelp')}</p>
+      </div>
     </div>
   {/if}
 </div>
 
 <style>
+  .actions { display: grid; gap: 12px; }
+  .action p { margin: 4px 0 0; }
   .field-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: start; }
   .templates { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 16px; padding: 12px 14px; margin-bottom: 20px; }
   .templates h2 { margin: 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
