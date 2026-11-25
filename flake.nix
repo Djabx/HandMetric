@@ -28,7 +28,7 @@
           packages = with pkgs; [
             cargo rustc rustfmt clippy rust-analyzer
             pkg-config openssl
-            nodejs_22 pnpm
+            nodejs_24 pnpm
             sqlite postgresql
           ];
           RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
