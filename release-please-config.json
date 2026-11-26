@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "include-v-in-tag": true,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "changelog-sections": [
+    { "type": "feat", "section": "Nouveautés" },
+    { "type": "fix", "section": "Corrections" },
+    { "type": "perf", "section": "Performances" },
+    { "type": "revert", "section": "Retours en arrière" },
+    { "type": "docs", "section": "Documentation", "hidden": true },
+    { "type": "build", "section": "Build", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "chore", "section": "Divers", "hidden": true },
+    { "type": "refactor", "section": "Refactorisation", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "style", "section": "Style", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "package-name": "lifelog",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        { "type": "json", "path": "app/package.json", "jsonpath": "$.version" },
+        { "type": "generic", "path": "app/src/lib/db/store.ts" },
+        { "type": "toml", "path": "server/Cargo.toml", "jsonpath": "$.package.version" },
+        {
+          "type": "toml",
+          "path": "server/Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==='lifelog-server')].version"
+        }
+      ]
+    }
+  }
+}
