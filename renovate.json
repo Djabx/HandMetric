@@ -151,6 +151,16 @@
       "allowedVersions": "<7"
     },
     {
+      "description": "reqwest reste en 0.12 tant qu'openidconnect (via oauth2 5) en dépend : le client HTTP qu'on lui passe doit être celui de sa version",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchPackageNames": [
+        "reqwest"
+      ],
+      "allowedVersions": "<0.13"
+    },
+    {
       "description": "Les mises à jour de dépendances sont des commits chore(deps), jamais fix(deps) : elles ne déclenchent pas de release à elles seules (release-please) et partent avec la prochaine release.",
       "matchPackageNames": [
         "*"
