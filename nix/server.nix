@@ -10,7 +10,8 @@
 
 rustPlatform.buildRustPackage {
   pname = "lifelog-server";
-  version = "0.1.0";
+  # Version tenue par release-please dans Cargo.toml.
+  version = (lib.importTOML ../server/Cargo.toml).package.version;
 
   src = lib.fileset.toSource {
     root = ../server;

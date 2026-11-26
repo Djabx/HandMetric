@@ -11,7 +11,8 @@
 
 stdenv.mkDerivation (finalAttrs: {
   pname = "lifelog-app";
-  version = "0.1.0";
+  # Version tenue par release-please dans package.json.
+  version = (lib.importJSON ../app/package.json).version;
 
   src = lib.fileset.toSource {
     root = ../app;
