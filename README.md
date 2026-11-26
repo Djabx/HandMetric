@@ -122,6 +122,14 @@ nix flake check                 # tout construire et tester
 
 Les messages de commit suivent [Conventional Commits](https://www.conventionalcommits.org/fr/) (`feat(app): …`, `fix(server): …`, `build(nix): …`). Les dépendances npm, Cargo, Nix et GitHub Actions sont tenues à jour par [Renovate](renovate.json), qui n'installe que des versions publiées depuis au moins un jour.
 
+## Releases
+
+Les versions sont gérées par [release-please](https://github.com/googleapis/release-please) à partir des messages de commit : à chaque fusion sur `main`, une PR « release » se met à jour avec la prochaine version et le [CHANGELOG](CHANGELOG.md).
+
+- `fix` → correctif (0.1.0 → 0.1.1) ; `feat` → mineure (0.1.0 → 0.2.0) ; `!` ou `BREAKING CHANGE` → mineure tant qu'on est en 0.x, majeure ensuite.
+- Les commits `docs`, `ci`, `build`, `chore`, `refactor`, `test` (dont les mises à jour Renovate) n'apparaissent pas dans le CHANGELOG et ne déclenchent pas de release.
+- Fusionner la PR release crée le tag `vX.Y.Z` et la release GitHub, et reporte la version dans `app/package.json`, `app/src/lib/db/store.ts`, `server/Cargo.toml` et `server/Cargo.lock`. Nix lit la version dans ces fichiers.
+
 ## Organisation du dépôt
 
 ```

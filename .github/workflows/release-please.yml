@@ -1,0 +1,29 @@
+# Releases à partir des Conventional Commits (https://github.com/googleapis/release-please).
+# À chaque push sur main, release-please tient à jour une PR « release » : prochaine version
+# (fix → patch, feat → mineure, ! → mineure tant qu'on est en 0.x) et CHANGELOG.md.
+# Fusionner cette PR crée le tag vX.Y.Z et la release GitHub, avec la version reportée dans
+# app/package.json, store.ts (APP_VERSION), server/Cargo.toml et server/Cargo.lock.
+# Nix lit la version dans Cargo.toml et package.json : rien à changer côté flake.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write # étiquettes « autorelease: pending / tagged »
+
+# Pas d'annulation en cours de route (on ne coupe pas la création d'un tag) ; si plusieurs
+# PR sont fusionnées d'affilée, seul le run le plus récent en attente est gardé.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v5

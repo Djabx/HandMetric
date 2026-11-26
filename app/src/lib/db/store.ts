@@ -18,7 +18,7 @@ import type {
   TrackerInput,
 } from '../types';
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.1.0'; // x-release-please-version
 
 /** Format JSON d'export. */
 export interface JsonExport {
