@@ -10,9 +10,13 @@ permissions:
   pages: write
   id-token: write
 
+# Un seul déploiement à la fois. Les runs arrivés pendant un déploiement attendent, et seul
+# le plus récent est gardé (les intermédiaires sont abandonnés) : quand plusieurs PR sont
+# fusionnées d'affilée, seul le dernier état de main est déployé. Le déploiement en cours
+# n'est jamais coupé, pour ne pas laisser le site à moitié publié.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:

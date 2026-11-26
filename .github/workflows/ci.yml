@@ -6,6 +6,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Un nouveau run sur la même branche (main ou une PR) annule celui en cours :
+# quand plusieurs PR sont fusionnées d'affilée, seul le dernier état de main compte.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   app:
     runs-on: ubuntu-latest
