@@ -204,11 +204,7 @@ pub async fn login_finish(
     let mut passkey: Passkey = serde_json::from_str(&cred)?;
     let result = state
         .webauthn
-        .finish_discoverable_authentication(
-            &body.credential,
-            auth,
-            &[DiscoverableKey::from(&passkey)],
-        )
+        .finish_discoverable_authentication_v2(&body.credential, auth, &passkey)
         .map_err(|_| AppError::Unauthorized)?;
     if passkey.update_credential(&result) == Some(true) {
         state
