@@ -1,4 +1,5 @@
 import { db } from './db/client';
+import { rememberHolder } from './storage';
 import type { LifeEvent, Tracker, TrackerField } from './types';
 import { computeStats, goalStatus, type GoalStatus, type TrackerStats } from './domain/stats';
 import { achievements, type Achievement } from './domain/achievements';
@@ -10,6 +11,8 @@ export const app = $state({
   persistent: true,
   /** Si la base n'a pas pu s'ouvrir sur l'appareil : pourquoi (détail technique en plus). */
   storageProblem: null as null | { issue: 'locked' | 'unsupported' | 'error'; detail: string },
+  /** Un autre onglet a ouvert LifeLog et a pris la base : cet onglet est en pause. */
+  displaced: false,
   trackers: [] as Tracker[],
   archived: [] as Tracker[],
   /** Corbeille : compteurs supprimés, restaurables. */
@@ -120,11 +123,14 @@ export async function refresh(notify = true) {
   checkAchievements(Date.now(), notify);
 }
 
+db.onDisplaced = () => (app.displaced = true);
+
 export async function init() {
   try {
     const info = await db.call('info');
     app.persistent = info.persistent;
     app.storageProblem = info.problem;
+    if (info.persistent) rememberHolder();
     await refresh();
     db.subscribe((remote) => void refresh(!remote));
     setInterval(() => checkAchievements(), 60_000);

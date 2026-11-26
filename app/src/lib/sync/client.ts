@@ -1,4 +1,5 @@
 import { db } from '../db/client';
+import { app } from '../state.svelte';
 import { sync, type Health } from './sync.svelte';
 import * as webauthn from './webauthn';
 import type { ChangeSet, Row } from '../types';
@@ -134,7 +135,7 @@ async function syncOnce(): Promise<void> {
 
 /** Lance une synchronisation (une seule à la fois ; relance si demandée pendant). */
 export function syncNow(): Promise<void> {
-  if (sync.mode !== 'server' || !sync.user) return Promise.resolve();
+  if (sync.mode !== 'server' || !sync.user || app.displaced) return Promise.resolve();
   if (running) {
     again = true;
     return running;

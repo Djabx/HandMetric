@@ -148,4 +148,5 @@ dialog::backdrop { background: rgb(0 0 0 / 0.45); }
 
 .banner { border-radius: var(--radius-sm); padding: 12px 14px; background: var(--surface-2); font-size: 0.9rem; }
 .banner.warn { border-left: 4px solid var(--warn); }
+.banner .retry { display: flex; margin-top: 10px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

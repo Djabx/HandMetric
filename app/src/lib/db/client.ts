@@ -8,9 +8,12 @@ class DbClient {
   private next = 1;
   private pending = new Map<number, Pending>();
   private listeners = new Set<(remote: boolean) => void>();
+  /** Appelé quand un autre onglet a pris la base (cet onglet ne peut plus s'en servir). */
+  onDisplaced: () => void = () => {};
 
   constructor() {
-    this.worker.onmessage = (msg: MessageEvent<{ id: number; result?: unknown; error?: string }>) => {
+    this.worker.onmessage = (msg: MessageEvent<{ id: number; result?: unknown; error?: string; event?: string }>) => {
+      if (msg.data.event === 'displaced') return this.onDisplaced();
       const p = this.pending.get(msg.data.id);
       if (!p) return;
       this.pending.delete(msg.data.id);
