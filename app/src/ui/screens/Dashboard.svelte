@@ -9,8 +9,18 @@
   import TrackerCard from '../components/TrackerCard.svelte';
   import EventDialog from '../components/EventDialog.svelte';
   import SyncBadge from '../components/SyncBadge.svelte';
+  import { flip } from 'svelte/animate';
+  import { tileSize } from '../../lib/domain/tile';
 
-  const views = $derived(app.trackers.map((tr) => viewOf(tr, clock.now)));
+  let lifted = $state<string | null>(null);
+  let liveOrder = $state<string[]>([]);
+  /** Ordre gardé à l'écran le temps que l'enregistrement revienne (pas de saut). */
+  let settling = $state(false);
+  const allViews = $derived(app.trackers.map((tr) => viewOf(tr, clock.now)));
+  /** Pendant un glisser-déposer, les tuiles suivent l'ordre en cours. */
+  const views = $derived(
+    lifted || settling ? liveOrder.map((id) => allViews.find((v) => v.tracker.id === id)).filter((v) => v !== undefined) : allViews,
+  );
   let logging = $state<TrackerView | null>(null);
 
   // ---------- réorganisation ----------
@@ -62,6 +72,71 @@
     order = next;
   }
 
+  // ---------- glisser-déposer des tuiles : appui long puis glisser ----------
+  const HOLD_MS = 450;
+  /** Tolérance avant l'appui long : au-delà, c'est un défilement. */
+  const SLOP = 10;
+  let grid = $state<HTMLElement>();
+  let press: { id: string; x: number; y: number; timer: ReturnType<typeof setTimeout>; pointer: number } | null = null;
+  /** Évite que le relâchement après un déplacement ouvre le compteur. */
+  let swallowClick = false;
+
+  function tileDown(e: PointerEvent) {
+    if (e.button !== 0) return;
+    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-id]')?.dataset.id;
+    if (!id) return;
+    const pointer = e.pointerId;
+    press = {
+      id, x: e.clientX, y: e.clientY, pointer,
+      timer: setTimeout(() => {
+        if (!press) return;
+        lifted = press.id;
+        liveOrder = app.trackers.map((tr) => tr.id);
+        navigator.vibrate?.(15);
+        try { grid?.setPointerCapture(pointer); } catch { /* le doigt est déjà parti */ }
+      }, HOLD_MS),
+    };
+  }
+
+  function tileMove(e: PointerEvent) {
+    if (press && !lifted && Math.hypot(e.clientX - press.x, e.clientY - press.y) > SLOP) cancelPress();
+    if (!lifted) return;
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-id]')?.dataset.id;
+    if (!over || over === lifted) return;
+    const next = liveOrder.filter((x) => x !== lifted);
+    next.splice(liveOrder.indexOf(over), 0, lifted);
+    liveOrder = next;
+  }
+
+  function cancelPress() {
+    if (press) clearTimeout(press.timer);
+    press = null;
+  }
+
+  async function tileUp() {
+    cancelPress();
+    if (!lifted) return;
+    swallowClick = true;
+    setTimeout(() => (swallowClick = false), 400);
+    const ids = $state.snapshot(liveOrder);
+    settling = true;
+    lifted = null;
+    try {
+      if (ids.some((id, i) => id !== app.trackers[i]?.id)) await db.write('reorderTrackers', ids);
+    } finally {
+      settling = false;
+    }
+  }
+
+  // Pendant le déplacement, le doigt ne fait plus défiler la page.
+  $effect(() => {
+    const el = grid;
+    if (!el) return;
+    const block = (e: TouchEvent) => { if (lifted) e.preventDefault(); };
+    el.addEventListener('touchmove', block, { passive: false });
+    return () => el.removeEventListener('touchmove', block);
+  });
+
   function drop() {
     if (!dragging) return;
     dragging = null;
@@ -103,11 +178,25 @@
     </ol>
     <div class="row" style="margin-top:12px"><button class="btn primary" onclick={finishReorder}>{t('dash.reorder.done')}</button></div>
   {:else}
-    <div class="grid">
+    <!-- svelte-ignore a11y_no_static_element_interactions (le clavier passe par ↕️ Réorganiser) -->
+    <div
+      class="grid"
+      class:dragging={lifted}
+      bind:this={grid}
+      onpointerdown={tileDown}
+      onpointermove={tileMove}
+      onpointerup={tileUp}
+      onpointercancel={tileUp}
+      oncontextmenu={(e) => { if (press || lifted) e.preventDefault(); }}
+      onclickcapture={(e) => { if (swallowClick) { e.preventDefault(); e.stopPropagation(); } }}
+    >
       {#each views as v (v.tracker.id)}
-        <TrackerCard view={v} now={clock.now} onlog={(x) => (logging = x)} />
+        <div class="cell {tileSize(v.tracker, v.fields.length)}" animate:flip={{ duration: 180 }}>
+          <TrackerCard view={v} now={clock.now} onlog={(x) => (logging = x)} lifted={lifted === v.tracker.id} />
+        </div>
       {/each}
     </div>
+    {#if views.length > 1}<p class="small muted hint">{t('dash.dragHint')}</p>{/if}
   {/if}
 </div>
 
@@ -123,6 +212,14 @@
   /* 6 colonnes : petite tuile = 2, normale ou haute = 3, large = toute la ligne. 12 sur grand écran. */
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-flow: row dense; }
   @media (min-width: 760px) { .grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+  .grid.dragging { touch-action: none; }
+  /* Tailles des tuiles : 6 colonnes (12 sur grand écran). */
+  .cell { grid-column: span 3; display: grid; min-width: 0; }
+  .cell.small { grid-column: span 2; }
+  .cell.wide { grid-column: 1 / -1; }
+  .cell.tall { grid-row: span 2; }
+  @media (min-width: 760px) { .cell.wide { grid-column: span 6; } }
+  .hint { text-align: center; margin: 16px 0 0; }
   .reorder { list-style: none; margin: 0; padding: 4px 12px; }
   .reorder li {
     display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border);

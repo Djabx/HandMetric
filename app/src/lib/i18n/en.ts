@@ -17,6 +17,7 @@ export const en: Record<Key, string> = {
   'common.confirmDelete': 'Delete for good?',
 
   'dash.new': 'New tracker',
+  'dash.dragHint': 'Tip: long-press a tile to move it.',
   'dash.reorder': 'Reorder trackers',
   'dash.reorder.help': 'Drag a tracker by its ⠿ handle, or use the arrows. The order is saved and synced.',
   'dash.reorder.drag': 'Move {name}',
