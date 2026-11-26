@@ -12,6 +12,12 @@ class DbClient {
   onDisplaced: () => void = () => {};
 
   constructor() {
+    // Firefox garde la page précédente en cache (bfcache) quand on la quitte, par exemple pour se
+    // connecter via SSO : son worker garderait la base verrouillée et la page de retour ne pourrait
+    // plus l'ouvrir (NoModificationAllowedError). On arrête donc le worker en quittant la page,
+    // et on recharge si le navigateur la ressort du cache.
+    addEventListener('pagehide', () => this.worker.terminate());
+    addEventListener('pageshow', (e: PageTransitionEvent) => e.persisted && location.reload());
     this.worker.onmessage = (msg: MessageEvent<{ id: number; result?: unknown; error?: string; event?: string }>) => {
       if (msg.data.event === 'displaced') return this.onDisplaced();
       const p = this.pending.get(msg.data.id);
