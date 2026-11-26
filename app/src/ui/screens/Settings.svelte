@@ -86,6 +86,7 @@
     <div class="card">
       <p class="banner" class:warn={!app.persistent || (sync.mode === 'server' ? !sync.user : persisted === false)} style="margin-top:0">
         {storageMessage}
+        {#if app.storageProblem?.issue === 'locked'}<button class="btn small retry" onclick={() => location.reload()}>{t('storage.retry')}</button>{/if}
         {#if app.storageProblem}<br /><span class="small muted">{app.storageProblem.detail}</span>{/if}
       </p>
       <h3>{t('settings.export')}</h3>

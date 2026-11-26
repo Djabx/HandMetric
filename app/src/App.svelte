@@ -27,6 +27,14 @@
 
 {#if !app.ready || (!app.error && !sync.checked)}
   <div class="page"><p class="muted" style="padding-top:40px;text-align:center">{t('common.loading')}</p></div>
+{:else if app.displaced}
+  <div class="page">
+    <section class="card displaced">
+      <h1>{t('displaced.title')}</h1>
+      <p class="muted">{t('displaced.body')}</p>
+      <button class="btn primary" onclick={() => location.reload()}>{t('displaced.resume')}</button>
+    </section>
+  </div>
 {:else if app.error}
   <div class="page"><p class="banner warn" style="margin-top:40px">{app.error}</p></div>
 {:else if router.route.name === 'about'}
@@ -46,3 +54,9 @@
 {/if}
 
 <Toasts />
+
+<style>
+  .displaced { margin-top: 40px; text-align: center; }
+  .displaced h1 { font-size: 1.2rem; margin: 0 0 8px; }
+  .displaced .btn { margin-top: 12px; }
+</style>

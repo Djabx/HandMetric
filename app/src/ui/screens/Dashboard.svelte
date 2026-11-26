@@ -155,7 +155,10 @@
   </header>
 
   {#if !app.persistent}
-    <p class="banner warn">{memoryWarning(app.storageProblem, sync.mode === 'server' && !!sync.user)}</p>
+    <p class="banner warn">
+      {memoryWarning(app.storageProblem, sync.mode === 'server' && !!sync.user)}
+      {#if app.storageProblem?.issue === 'locked'}<button class="btn small retry" onclick={() => location.reload()}>{t('storage.retry')}</button>{/if}
+    </p>
   {/if}
 
   {#if views.length === 0}
