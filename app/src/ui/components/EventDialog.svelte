@@ -83,10 +83,7 @@
     </h2>
     <div class="field">
       <span>{t('event.when')}</span>
-      <div class="row">
-        <DateTimeInput bind:value={when} label={t('event.when')} />
-        <button type="button" class="btn small" onclick={() => (when = Date.now())}>{t('event.now')}</button>
-      </div>
+      <DateTimeInput bind:value={when} label={t('event.when')} />
     </div>
     {#each fields as f (f.id)}
       <label class="field">
