@@ -6,6 +6,7 @@
   import { download, stamp } from '../../lib/io/download';
   import { APP_VERSION, TRASH_DAYS } from '../../lib/db/store';
   import SyncPanel from '../components/SyncPanel.svelte';
+  import Fold from '../components/Fold.svelte';
   import { memoryWarning } from '../../lib/storage';
   import { sync } from '../../lib/sync/sync.svelte';
 
@@ -24,6 +25,27 @@
             ? t('settings.storage.notPersisted')
             : t('settings.storage.ok'),
   );
+  const dataWarn = $derived(!app.persistent || (sync.mode === 'server' ? !sync.user : persisted === false));
+  /** Résumés affichés sous le titre des tuiles repliées. */
+  const dataSummary = $derived(
+    !app.persistent
+      ? t('settings.sum.atRisk')
+      : sync.mode === 'server' && sync.user
+        ? t('settings.sum.server', { host })
+        : t('settings.sum.local'),
+  );
+  const syncSummary = $derived(
+    sync.mode === 'solo'
+      ? t('settings.sum.solo')
+      : !sync.user
+        ? t('settings.sum.signedOut')
+        : sync.user.display_name || sync.identities.find((i) => i.label)?.label || t('sync.signedIn'),
+  );
+
+  const LANGS = [['fr', 'Français'], ['en', 'English']] as const;
+  /** Une seule tuile ouverte à la fois : en ouvrir une referme la précédente. */
+  let open = $state<string | null>(null);
+  const fold = (id: string) => ({ open: open === id, ontoggle: () => (open = open === id ? null : id) });
   const purgeDate = (deletedAt: string) => new Date(Date.parse(deletedAt) + TRASH_DAYS * 86_400_000).toISOString();
   $effect(() => {
     navigator.storage?.persisted?.().then((p) => (persisted = p));
@@ -70,129 +92,129 @@
     <h1>{t('settings.title')}</h1>
   </header>
 
-  <section class="section">
-    <h2>{t('settings.language')}</h2>
-    <div class="segmented">
-      {#each [['fr', 'Français'], ['en', 'English']] as [code, label] (code)}
-        <button aria-pressed={i18n.lang === code} onclick={() => setLang(code as Lang)}>{label}</button>
-      {/each}
-    </div>
-  </section>
-
-  <SyncPanel />
-
-  <section class="section">
-    <h2>{t('settings.data')}</h2>
-    <div class="card">
-      <p class="banner" class:warn={!app.persistent || (sync.mode === 'server' ? !sync.user : persisted === false)} style="margin-top:0">
-        {storageMessage}
-        {#if app.storageProblem?.issue === 'locked'}<button class="btn small retry" onclick={() => location.reload()}>{t('storage.retry')}</button>{/if}
-        {#if app.storageProblem}<br /><span class="small muted">{app.storageProblem.detail}</span>{/if}
-      </p>
-      <h3>{t('settings.export')}</h3>
-      <div class="row">
-        <button class="btn" disabled={busy} onclick={() => exportAs('sqlite')}>{t('settings.export.sqlite')}</button>
-        <button class="btn" disabled={busy} onclick={() => exportAs('json')}>{t('settings.export.json')}</button>
-        <button class="btn" disabled={busy} onclick={() => exportAs('csv')}>{t('settings.export.csv')}</button>
+  <div class="folds">
+    <Fold id="language" icon="🌍" color="#0090ff" title={t('settings.language')} summary={LANGS.find(([c]) => c === i18n.lang)?.[1]} {...fold('language')}>
+      <div class="segmented">
+        {#each LANGS as [code, label] (code)}
+          <button aria-pressed={i18n.lang === code} onclick={() => setLang(code as Lang)}>{label}</button>
+        {/each}
       </div>
-      <h3>{t('settings.import')}</h3>
-      <p class="small muted">{t('settings.import.help')}</p>
-      <!-- Pas d'attribut accept : iOS ne connaît pas l'extension .sqlite et grise alors le fichier
-           dans son sélecteur. Le contenu est vérifié à l'import (SQLite ou JSON LifeLog). -->
-      <input type="file" onchange={importFile} disabled={busy} />
-    </div>
-  </section>
+    </Fold>
 
-  {#if app.archived.length}
-    <section class="section">
-      <h2>{t('settings.archived')}</h2>
-      <p class="small muted">{t('settings.archived.help')}</p>
-      <ul class="list card" style="padding:0 16px">
-        {#each app.archived as tr (tr.id)}
-          <li class="row" style="padding:8px 0">
-            <button class="grow linkish" onclick={() => go(`t/${tr.id}`)}>{tr.icon ?? ''} {tr.name}</button>
-            <button class="btn small" onclick={() => db.write('setArchived', tr.id, false)}>{t('form.unarchive')}</button>
-          </li>
-        {/each}
-      </ul>
-    </section>
-  {/if}
+    <Fold id="sync" icon="🔄" color="#6e56cf" title={t('sync.title')} summary={syncSummary} warn={sync.mode === 'server' && !sync.user} {...fold('sync')}>
+      <SyncPanel />
+    </Fold>
 
-  {#if app.deleted.length || app.deletedEvents.length}
-    <section class="section">
-      <h2>{t('settings.trash')}</h2>
-      <p class="small muted">{t('settings.trash.help')}</p>
-      <div class="card trash">
-      {#if app.deleted.length}
-      <h3 class="trash-sub">{t('settings.trash.trackers')} · {app.deleted.length}</h3>
-      <ul class="list">
-        {#each app.deleted as tr (tr.id)}
-          <li class="row" style="padding:8px 0">
-            <div class="grow">
-              <div>{tr.icon ?? ''} {tr.name}</div>
-              <div class="small muted">{t('settings.trash.meta', { date: fmtDate(tr.deleted_at!), n: tr.event_count, purge: fmtDate(purgeDate(tr.deleted_at!)) })}</div>
-            </div>
-            <div class="trash-actions">
-              <button
-                class="btn small"
-                onclick={async () => {
-                  await db.write('restoreTracker', tr.id);
-                  toast(t('settings.trash.restored', { name: tr.name }), { icon: '♻️' });
-                }}>{t('settings.trash.restore')}</button>
-              <button
-                class="btn small danger"
-                onclick={async () => {
-                  if (!confirm(t('settings.trash.purgeConfirm', { name: tr.name, n: tr.event_count }))) return;
-                  await db.write('purgeTracker', tr.id);
-                  toast(t('settings.trash.purged', { name: tr.name }), { icon: '🔥' });
-                }}>{t('settings.trash.purge')}</button>
-            </div>
-          </li>
-        {/each}
-      </ul>
-      {/if}
-      {#if app.deletedEvents.length}
-        <h3 class="trash-sub">{t('settings.trash.events')} · {app.deletedEvents.length}</h3>
-        <ul class="list">
-          {#each app.deletedEvents as ev (ev.id)}
+    <Fold id="data" icon="💾" color="#46a758" title={t('settings.data')} summary={dataSummary} warn={dataWarn} {...fold('data')}>
+      <div class="card">
+        <p class="banner" class:warn={dataWarn} style="margin-top:0">
+          {storageMessage}
+          {#if app.storageProblem?.issue === 'locked'}<button class="btn small retry" onclick={() => location.reload()}>{t('storage.retry')}</button>{/if}
+          {#if app.storageProblem}<br /><span class="small muted">{app.storageProblem.detail}</span>{/if}
+        </p>
+        <h3>{t('settings.export')}</h3>
+        <div class="row">
+          <button class="btn" disabled={busy} onclick={() => exportAs('sqlite')}>{t('settings.export.sqlite')}</button>
+          <button class="btn" disabled={busy} onclick={() => exportAs('json')}>{t('settings.export.json')}</button>
+          <button class="btn" disabled={busy} onclick={() => exportAs('csv')}>{t('settings.export.csv')}</button>
+        </div>
+        <h3>{t('settings.import')}</h3>
+        <p class="small muted">{t('settings.import.help')}</p>
+        <!-- Pas d'attribut accept : iOS ne connaît pas l'extension .sqlite et grise alors le fichier
+             dans son sélecteur. Le contenu est vérifié à l'import (SQLite ou JSON LifeLog). -->
+        <input type="file" onchange={importFile} disabled={busy} />
+      </div>
+    </Fold>
+
+    {#if app.archived.length}
+      <Fold id="archived" icon="📦" color="#f76b15" title={t('settings.archived')} summary={t('settings.sum.archived', { n: app.archived.length })} {...fold('archived')}>
+        <p class="small muted">{t('settings.archived.help')}</p>
+        <ul class="list card" style="padding:0 16px">
+          {#each app.archived as tr (tr.id)}
             <li class="row" style="padding:8px 0">
-              <div class="grow">
-                <div>{ev.tracker_icon ?? ''} {ev.tracker_name} · {fmtDateTime(ev.occurred_at)}</div>
-                <div class="small muted">{t('settings.trash.eventMeta', { date: fmtDate(ev.deleted_at!), purge: fmtDate(purgeDate(ev.deleted_at!)) })}</div>
-              </div>
-              <div class="trash-actions">
-                <button
-                  class="btn small"
-                  onclick={async () => {
-                    await db.write('restoreEvent', ev.id);
-                    toast(t('settings.trash.eventRestored'), { icon: '♻️' });
-                  }}>{t('settings.trash.restore')}</button>
-                <button
-                  class="btn small danger"
-                  onclick={async () => {
-                    if (!confirm(t('settings.trash.eventPurgeConfirm'))) return;
-                    await db.write('purgeEvent', ev.id);
-                    toast(t('settings.trash.eventPurged'), { icon: '🔥' });
-                  }}>{t('settings.trash.purge')}</button>
-              </div>
+              <button class="grow linkish" onclick={() => go(`t/${tr.id}`)}>{tr.icon ?? ''} {tr.name}</button>
+              <button class="btn small" onclick={() => db.write('setArchived', tr.id, false)}>{t('form.unarchive')}</button>
             </li>
           {/each}
         </ul>
-      {/if}
-      </div>
-    </section>
-  {/if}
+      </Fold>
+    {/if}
 
-  <section class="section" id="about">
-    <h2>{t('settings.about')}</h2>
-    <p class="small muted">
-      {t('app.tagline')} <a href="#/about">{t('about.more')}</a><br />
-      {t('settings.version', { v: APP_VERSION })} · <a href="https://github.com/Djabx/lifelog" target="_blank" rel="noopener">{t('settings.source')}</a> · MIT
-    </p>
-  </section>
+    {#if app.deleted.length || app.deletedEvents.length}
+      <Fold id="trash" icon="🗑️" color="#e5484d" title={t('settings.trash')} summary={t('settings.sum.trash', { n: app.deleted.length + app.deletedEvents.length })} {...fold('trash')}>
+        <p class="small muted">{t('settings.trash.help')}</p>
+        <div class="card trash">
+          {#if app.deleted.length}
+            <h3 class="trash-sub">{t('settings.trash.trackers')} · {app.deleted.length}</h3>
+            <ul class="list">
+              {#each app.deleted as tr (tr.id)}
+                <li class="row" style="padding:8px 0">
+                  <div class="grow">
+                    <div>{tr.icon ?? ''} {tr.name}</div>
+                    <div class="small muted">{t('settings.trash.meta', { date: fmtDate(tr.deleted_at!), n: tr.event_count, purge: fmtDate(purgeDate(tr.deleted_at!)) })}</div>
+                  </div>
+                  <div class="trash-actions">
+                    <button
+                      class="btn small"
+                      onclick={async () => {
+                        await db.write('restoreTracker', tr.id);
+                        toast(t('settings.trash.restored', { name: tr.name }), { icon: '♻️' });
+                      }}>{t('settings.trash.restore')}</button>
+                    <button
+                      class="btn small danger"
+                      onclick={async () => {
+                        if (!confirm(t('settings.trash.purgeConfirm', { name: tr.name, n: tr.event_count }))) return;
+                        await db.write('purgeTracker', tr.id);
+                        toast(t('settings.trash.purged', { name: tr.name }), { icon: '🔥' });
+                      }}>{t('settings.trash.purge')}</button>
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if app.deletedEvents.length}
+            <h3 class="trash-sub">{t('settings.trash.events')} · {app.deletedEvents.length}</h3>
+            <ul class="list">
+              {#each app.deletedEvents as ev (ev.id)}
+                <li class="row" style="padding:8px 0">
+                  <div class="grow">
+                    <div>{ev.tracker_icon ?? ''} {ev.tracker_name} · {fmtDateTime(ev.occurred_at)}</div>
+                    <div class="small muted">{t('settings.trash.eventMeta', { date: fmtDate(ev.deleted_at!), purge: fmtDate(purgeDate(ev.deleted_at!)) })}</div>
+                  </div>
+                  <div class="trash-actions">
+                    <button
+                      class="btn small"
+                      onclick={async () => {
+                        await db.write('restoreEvent', ev.id);
+                        toast(t('settings.trash.eventRestored'), { icon: '♻️' });
+                      }}>{t('settings.trash.restore')}</button>
+                    <button
+                      class="btn small danger"
+                      onclick={async () => {
+                        if (!confirm(t('settings.trash.eventPurgeConfirm'))) return;
+                        await db.write('purgeEvent', ev.id);
+                        toast(t('settings.trash.eventPurged'), { icon: '🔥' });
+                      }}>{t('settings.trash.purge')}</button>
+                  </div>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      </Fold>
+    {/if}
+
+    <Fold id="about" icon="💜" color="#8d8d8d" title={t('settings.about')} summary={t('settings.version', { v: APP_VERSION })} {...fold('about')}>
+      <p class="small muted" style="margin-bottom:0">
+        {t('app.tagline')} <a href="#/about">{t('about.more')}</a><br />
+        {t('settings.version', { v: APP_VERSION })} · <a href="https://github.com/Djabx/lifelog" target="_blank" rel="noopener">{t('settings.source')}</a> · MIT
+      </p>
+    </Fold>
+  </div>
 </div>
 
 <style>
+  .folds { display: grid; gap: 12px; margin-top: 12px; }
   .trash { padding: 4px 16px 4px; }
   .trash .trash-sub {
     font-family: inherit; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
