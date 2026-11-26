@@ -1,0 +1,43 @@
+# Construit la dernière version de LifeLog sur le runner Forgejo d'Apollo,
+# pour que le cache Harmonia la serve.
+#
+# Harmonia sert directement le /nix/store d'Apollo : il n'y a rien à
+# « pousser ». Il suffit que le build se fasse dans ce store-là, donc sur un
+# runner en mode host (pas Docker) qui parle au démon Nix d'Apollo.
+#
+# Ce fichier n'est lu que par Forgejo : GitHub ignore .forgejo/. Et comme
+# .forgejo/workflows existe, Forgejo ignore à son tour .github/workflows.
+name: Cache Harmonia
+
+on:
+  # Synchronisation du miroir qui fait avancer main.
+  push:
+    branches: [main]
+  # Filet de sécurité si la synchro du miroir ne déclenche pas « push » :
+  # sans changement, le build est déjà dans le store et ne coûte rien.
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: harmonia
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Étiquette du runner host d'Apollo (labels = [ "nixos:host" ]).
+    runs-on: nixos
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construire le serveur (paquet du module NixOS)
+        run: |
+          # Lien gardé hors du dossier de travail : il sert de racine GC,
+          # pour que le ramasse-miettes de Nix ne retire pas le build du cache.
+          # Le nouveau build remplace l'ancien, qui redevient collectable.
+          gcroots="$HOME/lifelog-cache"
+          mkdir -p "$gcroots"
+          nix --extra-experimental-features 'nix-command flakes' build -L \
+            .#packages.x86_64-linux.server \
+            --out-link "$gcroots/server"
+          readlink -f "$gcroots/server"
