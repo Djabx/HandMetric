@@ -96,7 +96,9 @@
       </div>
       <h3>{t('settings.import')}</h3>
       <p class="small muted">{t('settings.import.help')}</p>
-      <input type="file" accept=".sqlite,.sqlite3,.db,.json,application/json,application/vnd.sqlite3" onchange={importFile} disabled={busy} />
+      <!-- Pas d'attribut accept : iOS ne connaît pas l'extension .sqlite et grise alors le fichier
+           dans son sélecteur. Le contenu est vérifié à l'import (SQLite ou JSON LifeLog). -->
+      <input type="file" onchange={importFile} disabled={busy} />
     </div>
   </section>
 

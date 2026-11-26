@@ -72,7 +72,7 @@ export function createApi(sqlite3: Sqlite3, sql: Sql, persistent: boolean, probl
         try {
           data = JSON.parse(new TextDecoder().decode(bytes));
         } catch {
-          throw new Error('Format de fichier non reconnu.');
+          throw new Error('Format de fichier non reconnu : choisis un export LifeLog (.lifelog.sqlite ou .json).');
         }
         changes = readJsonExport(data);
       }
