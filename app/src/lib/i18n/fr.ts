@@ -15,6 +15,7 @@ export const fr = {
   'common.confirmDelete': 'Supprimer définitivement ?',
 
   'dash.new': 'Nouveau compteur',
+  'dash.dragHint': 'Astuce : appuie longuement sur une tuile pour la déplacer.',
   'dash.reorder': 'Réorganiser les compteurs',
   'dash.reorder.help': 'Glisse un compteur par sa poignée ⠿, ou utilise les flèches. L\'ordre est enregistré et synchronisé.',
   'dash.reorder.drag': 'Déplacer {name}',

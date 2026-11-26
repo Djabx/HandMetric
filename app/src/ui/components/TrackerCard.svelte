@@ -8,7 +8,7 @@
   import GoalBar from './GoalBar.svelte';
   import Tally from './Tally.svelte';
 
-  let { view, now, onlog }: { view: TrackerView; now: number; onlog: (v: TrackerView) => void } = $props();
+  let { view, now, onlog, lifted = false }: { view: TrackerView; now: number; onlog: (v: TrackerView) => void; lifted?: boolean } = $props();
   const tr = $derived(view.tracker);
   const s = $derived(view.stats);
   const size = $derived(tileSize(tr, view.fields.length));
@@ -64,7 +64,7 @@
   }
 </script>
 
-<article class="tracker {size}" style:--c={tr.color ?? 'var(--accent)'}>
+<article class="tracker {size}" class:lifted data-id={tr.id} style:--c={tr.color ?? 'var(--accent)'}>
   <button class="body" onclick={() => go(`t/${tr.id}`)} aria-label={tr.name}>
     <span class="head">
       <span class="icon" aria-hidden="true">{tr.icon ?? '•'}</span>
@@ -106,15 +106,15 @@
   .tracker {
     --tint: color-mix(in srgb, var(--c) 16%, var(--surface));
     display: grid; grid-template-rows: 1fr auto; gap: 10px; padding: 14px; min-width: 0;
-    grid-column: span 3;
     border-radius: var(--radius); background: var(--tint);
     transition: transform 0.15s;
   }
-  /* Grille de l'accueil en 6 colonnes (12 sur grand écran) : voir Dashboard. */
-  .tracker.small { grid-column: span 2; padding: 12px; gap: 8px; }
-  .tracker.wide { grid-column: 1 / -1; grid-template-rows: none; grid-template-columns: 1fr auto; align-items: center; }
-  .tracker.tall { grid-row: span 2; }
-  @media (min-width: 760px) { .tracker.wide { grid-column: span 6; } }
+  /* Appui long : la tuile se soulève et suit le doigt dans la grille (voir Dashboard). */
+  .tracker { -webkit-touch-callout: none; user-select: none; }
+  .tracker.lifted { transform: scale(1.04); box-shadow: 0 12px 32px color-mix(in srgb, var(--c) 45%, transparent); z-index: 2; position: relative; }
+  /* La place dans la grille (colonnes, lignes) est donnée par Dashboard. */
+  .tracker.small { padding: 12px; gap: 8px; }
+  .tracker.wide { grid-template-rows: none; grid-template-columns: 1fr auto; align-items: center; }
   .small .head { flex-direction: column; align-items: flex-start; gap: 4px; }
   .small .name { font-size: 0.9rem; max-width: 100%; }
   .small .log { min-height: 34px; min-width: 52px; padding: 0 12px; font-size: 0.9rem; }
