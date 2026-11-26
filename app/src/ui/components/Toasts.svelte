@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { fly } from 'svelte/transition';
   import { dismiss, toasts } from '../../lib/state.svelte';
 </script>
 
 <div class="toasts" role="status" aria-live="polite">
   {#each toasts.list as tst (tst.id)}
-    <div class="toast">
+    <div class="toast" transition:fly={{ y: -16, duration: 180 }}>
       {#if tst.icon}<span aria-hidden="true">{tst.icon}</span>{/if}
       <span class="grow">{tst.text}</span>
       {#if tst.action}
@@ -15,8 +16,9 @@
 </div>
 
 <style>
+  /* En haut de l'écran : en bas, les notifications cachaient les boutons +1 des dernières tuiles. */
   .toasts {
-    position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom));
+    position: fixed; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top));
     z-index: 50; display: grid; gap: 8px; width: min(440px, calc(100vw - 32px));
   }
   .toast {
