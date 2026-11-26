@@ -149,6 +149,13 @@
         "typescript"
       ],
       "allowedVersions": "<7"
+    },
+    {
+      "description": "Les mises à jour de dépendances sont des commits chore(deps), jamais fix(deps) : elles ne déclenchent pas de release à elles seules (release-please) et partent avec la prochaine release.",
+      "matchPackageNames": [
+        "*"
+      ],
+      "semanticCommitType": "chore"
     }
   ]
 }
