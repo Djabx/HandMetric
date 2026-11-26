@@ -7,6 +7,7 @@
   import { APP_VERSION, TRASH_DAYS } from '../../lib/db/store';
   import SyncPanel from '../components/SyncPanel.svelte';
   import Fold from '../components/Fold.svelte';
+  import AboutContent from '../components/AboutContent.svelte';
   import { memoryWarning } from '../../lib/storage';
   import { sync } from '../../lib/sync/sync.svelte';
 
@@ -205,10 +206,7 @@
     {/if}
 
     <Fold id="about" icon="💜" color="#8d8d8d" title={t('settings.about')} summary={t('settings.version', { v: APP_VERSION })} {...fold('about')}>
-      <p class="small muted" style="margin-bottom:0">
-        {t('app.tagline')} <a href="#/about">{t('about.more')}</a><br />
-        {t('settings.version', { v: APP_VERSION })} · <a href="https://github.com/Djabx/lifelog" target="_blank" rel="noopener">{t('settings.source')}</a> · MIT
-      </p>
+      <AboutContent />
     </Fold>
   </div>
 </div>
