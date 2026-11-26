@@ -84,99 +84,96 @@
   const signedInName = $derived(sync.user?.display_name || sync.identities.find((i) => i.label)?.label || null);
 </script>
 
-<section class="section">
-  <h2>{t('sync.title')}</h2>
-  {#if sync.mode === 'solo'}
-    <p class="card small muted" style="margin:0">{t('sync.solo')}</p>
-  {:else if !sync.user}
-    <SignIn />
-  {:else}
-    <div class="card stack">
-      <div class="row">
-        <strong class="grow">{signedInName ? t('sync.signedInAs', { name: signedInName }) : t('sync.signedIn')}</strong>
-        <button class="btn small" disabled={busy} onclick={() => run(logout)}>{t('sync.signOut')}</button>
-      </div>
-      <div class="row">
-        <span class="grow small muted">
-          {#if sync.status === 'syncing'}{t('sync.syncing')}
-          {:else if sync.status === 'error'}<span style="color:var(--bad)">{t('sync.error', { msg: sync.error })}</span>
-          {:else if !sync.online}{t('sync.offline')}
-          {:else if sync.lastSyncAt}{t('sync.last', { when: fmtRelative(Date.parse(sync.lastSyncAt), clock.now) })}
-          {:else}{t('sync.never')}{/if}
-        </span>
-        <button class="btn small" disabled={sync.status === 'syncing'} onclick={() => syncNow()}>{t('sync.now')}</button>
-      </div>
+{#if sync.mode === 'solo'}
+  <p class="card small muted" style="margin:0">{t('sync.solo')}</p>
+{:else if !sync.user}
+  <SignIn />
+{:else}
+  <div class="card stack">
+    <div class="row">
+      <strong class="grow">{signedInName ? t('sync.signedInAs', { name: signedInName }) : t('sync.signedIn')}</strong>
+      <button class="btn small" disabled={busy} onclick={() => run(logout)}>{t('sync.signOut')}</button>
     </div>
+    <div class="row">
+      <span class="grow small muted">
+        {#if sync.status === 'syncing'}{t('sync.syncing')}
+        {:else if sync.status === 'error'}<span style="color:var(--bad)">{t('sync.error', { msg: sync.error })}</span>
+        {:else if !sync.online}{t('sync.offline')}
+        {:else if sync.lastSyncAt}{t('sync.last', { when: fmtRelative(Date.parse(sync.lastSyncAt), clock.now) })}
+        {:else}{t('sync.never')}{/if}
+      </span>
+      <button class="btn small" disabled={sync.status === 'syncing'} onclick={() => syncNow()}>{t('sync.now')}</button>
+    </div>
+  </div>
 
-    <h3>{t('sync.passkeys')}</h3>
+  <h3>{t('sync.passkeys')}</h3>
+  <ul class="list card" style="padding:0 16px">
+    {#each sync.identities as i (i.id)}
+      <li class="row" style="padding:8px 0">
+        <span class="grow">
+          {i.kind === 'passkey' ? '🔑' : '🌐'}
+          {i.kind === 'passkey' ? (i.label ?? 'Passkey') : `${sync.health?.auth.oidc.find((p) => p.id === i.provider)?.name ?? i.provider}${i.label ? ` · ${i.label}` : ''}`}
+          <span class="small muted">· {fmtDateTime(i.created_at)}</span>
+        </span>
+        {#if sync.identities.length > 1}
+          <button class="btn small danger" disabled={busy} onclick={() => removeIdentity(i.id)}>{t('common.delete')}</button>
+        {/if}
+      </li>
+    {/each}
+  </ul>
+  <div class="row" style="margin-top:8px">
+    {#if sync.health?.auth.passkey && supported()}
+      <button class="btn small" disabled={busy} onclick={() => run(() => passkeyRegister(undefined, navigator.platform || undefined))}>＋ {t('sync.addPasskey')}</button>
+    {/if}
+    {#each (sync.health?.auth.oidc ?? []).filter((p) => !linked.has(p.id)) as p (p.id)}
+      <a class="btn small" href="/auth/oidc/{p.id}/start">＋ {p.name}</a>
+    {/each}
+  </div>
+
+  <h3>{t('sync.tokens')}</h3>
+  <p class="small muted">{t('sync.tokens.help')}</p>
+  {#if tokens.length}
     <ul class="list card" style="padding:0 16px">
-      {#each sync.identities as i (i.id)}
+      {#each tokens as tk (tk.id)}
         <li class="row" style="padding:8px 0">
           <span class="grow">
-            {i.kind === 'passkey' ? '🔑' : '🌐'}
-            {i.kind === 'passkey' ? (i.label ?? 'Passkey') : `${sync.health?.auth.oidc.find((p) => p.id === i.provider)?.name ?? i.provider}${i.label ? ` · ${i.label}` : ''}`}
-            <span class="small muted">· {fmtDateTime(i.created_at)}</span>
+            <strong>{tk.name}</strong> · {scopeLabel(tk.scope)}{tk.tracker_id ? ` · ${trackerName(tk.tracker_id)}` : ''}<br />
+            <span class="small muted">{tk.last_used_at ? t('sync.token.lastUsed', { when: fmtDateTime(tk.last_used_at) }) : t('sync.token.neverUsed')}</span>
           </span>
-          {#if sync.identities.length > 1}
-            <button class="btn small danger" disabled={busy} onclick={() => removeIdentity(i.id)}>{t('common.delete')}</button>
-          {/if}
+          <button class="btn small danger" disabled={busy} onclick={() => revoke(tk.id)}>{t('sync.token.revoke')}</button>
         </li>
       {/each}
     </ul>
-    <div class="row" style="margin-top:8px">
-      {#if sync.health?.auth.passkey && supported()}
-        <button class="btn small" disabled={busy} onclick={() => run(() => passkeyRegister(undefined, navigator.platform || undefined))}>＋ {t('sync.addPasskey')}</button>
-      {/if}
-      {#each (sync.health?.auth.oidc ?? []).filter((p) => !linked.has(p.id)) as p (p.id)}
-        <a class="btn small" href="/auth/oidc/{p.id}/start">＋ {p.name}</a>
-      {/each}
-    </div>
-
-    <h3>{t('sync.tokens')}</h3>
-    <p class="small muted">{t('sync.tokens.help')}</p>
-    {#if tokens.length}
-      <ul class="list card" style="padding:0 16px">
-        {#each tokens as tk (tk.id)}
-          <li class="row" style="padding:8px 0">
-            <span class="grow">
-              <strong>{tk.name}</strong> · {scopeLabel(tk.scope)}{tk.tracker_id ? ` · ${trackerName(tk.tracker_id)}` : ''}<br />
-              <span class="small muted">{tk.last_used_at ? t('sync.token.lastUsed', { when: fmtDateTime(tk.last_used_at) }) : t('sync.token.neverUsed')}</span>
-            </span>
-            <button class="btn small danger" disabled={busy} onclick={() => revoke(tk.id)}>{t('sync.token.revoke')}</button>
-          </li>
-        {/each}
-      </ul>
-    {/if}
-    {#if created}
-      <div class="banner" style="margin-top:8px">
-        <p style="margin-top:0">{t('sync.token.created')}</p>
-        <code class="secret">{created.webhook_url ?? created.secret}</code>
-        {#if created.webhook_url}
-          <p class="small muted">curl -X POST {created.webhook_url}</p>
-        {:else}
-          <p class="small muted">Authorization: Bearer {created.secret}</p>
-        {/if}
-        <button class="btn small" onclick={() => (created = null)}>{t('common.close')}</button>
-      </div>
-    {/if}
-    <form class="card stack" style="margin-top:8px" onsubmit={createToken}>
-      <strong>{t('sync.token.new')}</strong>
-      <input type="text" bind:value={newName} required maxlength="80" placeholder={t('sync.token.name')} aria-label={t('sync.token.name')} />
-      <select bind:value={newScope} aria-label="Portée">
-        <option value="webhook">{t('sync.token.scope.webhook')}</option>
-        <option value="events:write">{t('sync.token.scope.events')}</option>
-        <option value="export:read">{t('sync.token.scope.export')}</option>
-      </select>
-      {#if newScope === 'webhook'}
-        <select bind:value={newTracker} required aria-label={t('form.name')}>
-          <option value="" disabled>—</option>
-          {#each app.trackers as tr (tr.id)}<option value={tr.id}>{tr.icon ?? ''} {tr.name}</option>{/each}
-        </select>
-      {/if}
-      <div><button class="btn primary small" disabled={busy}>{t('sync.token.new')}</button></div>
-    </form>
   {/if}
-</section>
+  {#if created}
+    <div class="banner" style="margin-top:8px">
+      <p style="margin-top:0">{t('sync.token.created')}</p>
+      <code class="secret">{created.webhook_url ?? created.secret}</code>
+      {#if created.webhook_url}
+        <p class="small muted">curl -X POST {created.webhook_url}</p>
+      {:else}
+        <p class="small muted">Authorization: Bearer {created.secret}</p>
+      {/if}
+      <button class="btn small" onclick={() => (created = null)}>{t('common.close')}</button>
+    </div>
+  {/if}
+  <form class="card stack" style="margin-top:8px" onsubmit={createToken}>
+    <strong>{t('sync.token.new')}</strong>
+    <input type="text" bind:value={newName} required maxlength="80" placeholder={t('sync.token.name')} aria-label={t('sync.token.name')} />
+    <select bind:value={newScope} aria-label="Portée">
+      <option value="webhook">{t('sync.token.scope.webhook')}</option>
+      <option value="events:write">{t('sync.token.scope.events')}</option>
+      <option value="export:read">{t('sync.token.scope.export')}</option>
+    </select>
+    {#if newScope === 'webhook'}
+      <select bind:value={newTracker} required aria-label={t('form.name')}>
+        <option value="" disabled>—</option>
+        {#each app.trackers as tr (tr.id)}<option value={tr.id}>{tr.icon ?? ''} {tr.name}</option>{/each}
+      </select>
+    {/if}
+    <div><button class="btn primary small" disabled={busy}>{t('sync.token.new')}</button></div>
+  </form>
+{/if}
 
 <style>
   .stack { display: grid; gap: 10px; }
