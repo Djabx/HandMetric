@@ -2,8 +2,6 @@
 {
   lib,
   rustPlatform,
-  pkg-config,
-  openssl,
   makeWrapper,
   app,
 }:
@@ -30,11 +28,7 @@ rustPlatform.buildRustPackage {
   # les relancer ici recompilerait tout le projet une seconde fois.
   doCheck = false;
 
-  nativeBuildInputs = [
-    pkg-config
-    makeWrapper
-  ];
-  buildInputs = [ openssl ];
+  nativeBuildInputs = [ makeWrapper ];
 
   postInstall = ''
     mkdir -p $out/share/lifelog
