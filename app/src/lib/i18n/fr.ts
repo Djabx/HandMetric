@@ -185,8 +185,6 @@ export const fr = {
   'dur.years': '{n} ans',
   'dur.month': '{n} mois',
   'dur.months': '{n} mois',
-  'dur.week': '{n} semaine',
-  'dur.weeks': '{n} semaines',
   'dur.day': '{n} jour',
   'dur.days': '{n} jours',
   'dur.hour': '{n} heure',

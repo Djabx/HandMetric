@@ -187,8 +187,6 @@ export const en: Record<Key, string> = {
   'dur.years': '{n} years',
   'dur.month': '{n} month',
   'dur.months': '{n} months',
-  'dur.week': '{n} week',
-  'dur.weeks': '{n} weeks',
   'dur.day': '{n} day',
   'dur.days': '{n} days',
   'dur.hour': '{n} hour',
