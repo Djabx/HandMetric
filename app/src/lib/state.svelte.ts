@@ -57,10 +57,11 @@ export interface Toast {
 }
 export const toasts = $state({ list: [] as Toast[] });
 let toastId = 1;
+/** `ms = 0` keeps the toast until its action is used. */
 export function toast(text: string, opts: Omit<Toast, 'id' | 'text'> = {}, ms = 4000) {
   const id = toastId++;
   toasts.list.push({ id, text, ...opts });
-  setTimeout(() => dismiss(id), ms);
+  if (ms > 0) setTimeout(() => dismiss(id), ms);
 }
 export function dismiss(id: number) {
   toasts.list = toasts.list.filter((t) => t.id !== id);

@@ -11,7 +11,9 @@
     {
       packages = forAll (pkgs:
         let
-          app = pkgs.callPackage ./nix/app.nix { };
+          app = pkgs.callPackage ./nix/app.nix {
+            commit = self.shortRev or self.dirtyShortRev or "unknown";
+          };
           server = pkgs.callPackage ./nix/server.nix { inherit app; };
         in
         {

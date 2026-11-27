@@ -5,6 +5,13 @@
   import { APP_VERSION } from '../../lib/db/store';
   import Intro from './Intro.svelte';
   import DataModes from './DataModes.svelte';
+  import { APP_COMMIT, check, forceReload, pwa, reloadNow } from '../../lib/pwa.svelte';
+  import { toast } from '../../lib/state.svelte';
+
+  async function onCheck() {
+    if (!navigator.onLine) return toast(t('update.offline'), { icon: '📡' });
+    if (!(await check())) toast(t('update.upToDate'), { icon: '✅' });
+  }
 
   const REPO = 'https://github.com/Djabx/lifelog';
 </script>
@@ -37,11 +44,27 @@
     </a>
   </section>
 
-  <p class="small muted">{t('settings.version', { v: APP_VERSION })} · MIT</p>
+  <section class="section">
+    <h3>{t('update.title')}</h3>
+    <p>{t('update.body')}</p>
+    <div class="row">
+      {#if pwa.needRefresh}
+        <button class="btn primary" onclick={() => void reloadNow()}>✨ {t('update.reload')}</button>
+      {:else}
+        <button class="btn" disabled={pwa.checking} onclick={onCheck}>
+          {pwa.checking ? t('update.checking') : t('update.check')}
+        </button>
+      {/if}
+      <button class="btn" onclick={() => confirm(t('update.forceConfirm')) && void forceReload()}>{t('update.force')}</button>
+    </div>
+  </section>
+
+  <p class="small muted">{t('settings.versionCommit', { v: APP_VERSION, c: APP_COMMIT })} · MIT</p>
 
 <style>
   a.btn { text-decoration: none; color: inherit; }
   .gh { flex: none; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
   .lead { font-size: 1.15rem; font-weight: 600; }
   h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 10px; }
 </style>
