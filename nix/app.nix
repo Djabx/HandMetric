@@ -7,6 +7,8 @@
   fetchPnpmDeps,
   pnpmConfigHook,
   mode ? "auto",
+  # Short commit hash shown in About (no .git inside the build sandbox).
+  commit ? "unknown",
 }:
 
 stdenv.mkDerivation (finalAttrs: {
@@ -37,7 +39,10 @@ stdenv.mkDerivation (finalAttrs: {
     pnpmConfigHook
   ];
 
-  env.LIFELOG_MODE = mode;
+  env = {
+    LIFELOG_MODE = mode;
+    LIFELOG_COMMIT = commit;
+  };
 
   buildPhase = ''
     runHook preBuild

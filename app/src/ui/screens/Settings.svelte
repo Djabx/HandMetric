@@ -5,6 +5,7 @@
   import { back, go } from '../../lib/router.svelte';
   import { download, stamp } from '../../lib/io/download';
   import { APP_VERSION, TRASH_DAYS } from '../../lib/db/store';
+  import { APP_COMMIT } from '../../lib/pwa.svelte';
   import SyncPanel from '../components/SyncPanel.svelte';
   import Fold from '../components/Fold.svelte';
   import AboutContent from '../components/AboutContent.svelte';
@@ -205,7 +206,7 @@
       </Fold>
     {/if}
 
-    <Fold id="about" icon="💜" color="#8d8d8d" title={t('settings.about')} summary={t('settings.version', { v: APP_VERSION })} {...fold('about')}>
+    <Fold id="about" icon="💜" color="#8d8d8d" title={t('settings.about')} summary={t('settings.versionCommit', { v: APP_VERSION, c: APP_COMMIT })} {...fold('about')}>
       <AboutContent />
     </Fold>
   </div>
