@@ -430,3 +430,52 @@ async fn health_and_registration_config() {
     assert_eq!(s, StatusCode::OK);
     assert!(v["options"]["publicKey"]["challenge"].is_string());
 }
+
+#[tokio::test]
+async fn static_files_are_revalidated() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("index.html"), "<!doctype html>").unwrap();
+    std::fs::write(dir.path().join("sw.js"), "// sw").unwrap();
+    std::fs::create_dir(dir.path().join("assets")).unwrap();
+    std::fs::write(dir.path().join("assets/index-abc.js"), "// js").unwrap();
+    let db = tempfile::tempdir().unwrap();
+    let file = FileConfig {
+        database_url: Some(format!("sqlite://{}/t.db?mode=rwc", db.path().display())),
+        public_url: Some("https://lifelog.example.org".into()),
+        static_dir: Some(dir.path().to_path_buf()),
+        ..Default::default()
+    };
+    let state = AppState::new(Config::from_parts(file).unwrap())
+        .await
+        .unwrap();
+    let app = router(state);
+    let get = |uri: &'static str| {
+        Request::builder()
+            .uri(uri)
+            .header("if-modified-since", "Thu, 01 Jan 2099 00:00:00 GMT")
+            .body(Body::empty())
+            .unwrap()
+    };
+
+    // sw.js: no Last-Modified, and an old validator never yields a 304 (Nix store mtimes are all 1970).
+    let res = app.clone().oneshot(get("/sw.js")).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()["cache-control"], "no-cache");
+    assert!(res.headers().get("last-modified").is_none());
+
+    // SPA fallback goes to index.html with the same policy.
+    let res = app.clone().oneshot(get("/anything")).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()["cache-control"], "no-cache");
+
+    let res = app
+        .clone()
+        .oneshot(get("/assets/index-abc.js"))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(res.headers()["cache-control"]
+        .to_str()
+        .unwrap()
+        .contains("immutable"));
+}

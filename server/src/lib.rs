@@ -8,7 +8,10 @@ pub mod error;
 pub mod export;
 pub mod hlc;
 
+use axum::extract::Request;
 use axum::http::{header, HeaderValue};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use axum::routing::{delete, get, post};
 use axum::Router;
 use std::sync::Arc;
@@ -52,6 +55,30 @@ impl AppState {
             config,
         })))
     }
+}
+
+/// Cache policy for the PWA files.
+///
+/// Files under `assets/` have a content hash in their name: cached for good. Everything else
+/// (`index.html`, `sw.js`, the manifest, icons) must be revalidated, otherwise an installed PWA
+/// never sees a new version. `Last-Modified` cannot be trusted for that: in the Nix store every
+/// file is dated 1970, so a conditional request would get a `304` after an upgrade. We drop it
+/// (and ignore `If-Modified-Since`) so the browser always gets the current file.
+async fn static_cache(mut req: Request, next: Next) -> Response {
+    let hashed = req.uri().path().contains("/assets/");
+    req.headers_mut().remove(header::IF_MODIFIED_SINCE);
+    let mut res = next.run(req).await;
+    let headers = res.headers_mut();
+    if hashed {
+        headers.insert(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        );
+    } else {
+        headers.remove(header::LAST_MODIFIED);
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    }
+    res
 }
 
 pub fn router(state: AppState) -> Router {
@@ -98,7 +125,10 @@ pub fn router(state: AppState) -> Router {
 
     if let Some(dir) = &state.config.static_dir {
         let index = dir.join("index.html");
-        app = app.fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)));
+        let files = Router::new()
+            .fallback_service(ServeDir::new(dir).fallback(ServeFile::new(index)))
+            .layer(middleware::from_fn(static_cache));
+        app = app.fallback_service(files);
     }
 
     app.layer(tower_http::trace::TraceLayer::new_for_http())
