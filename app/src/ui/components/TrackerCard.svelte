@@ -109,9 +109,12 @@
     border-radius: var(--radius); background: var(--tint);
     transition: transform 0.15s;
   }
-  /* Appui long : la tuile se soulève et suit le doigt dans la grille (voir Dashboard). */
+  /* Long press: a floating copy of the tile lifts and follows the finger (see Dashboard). */
   .tracker { -webkit-touch-callout: none; user-select: none; }
-  .tracker.lifted { transform: scale(1.04); box-shadow: 0 12px 32px color-mix(in srgb, var(--c) 45%, transparent); z-index: 2; position: relative; }
+  .tracker.lifted {
+    transform: scale(1.05) rotate(-1.5deg);
+    box-shadow: 0 4px 10px rgb(20 10 60 / 0.12), 0 20px 44px color-mix(in srgb, var(--c) 45%, transparent);
+  }
   /* La place dans la grille (colonnes, lignes) est donnée par Dashboard. */
   .tracker.small { padding: 12px; gap: 8px; }
   .tracker.wide { grid-template-rows: none; grid-template-columns: 1fr auto; align-items: center; }
