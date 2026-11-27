@@ -64,15 +64,15 @@ function unit(n: number, one: Key, many: Key) {
 
 /**
  * Durée à l'échelle humaine : jamais de secondes. L'unité principale dépend de
- * l'ancienneté, complétée par l'unité juste en dessous si elle n'est pas nulle.
- * Ex. « 20 ans », « 6 mois et 2 semaines », « 3 jours et 4 heures », « 12 minutes ».
+ * l'ancienneté, complétée par l'unité juste en dessous si elle n'est pas nulle
+ * (années et mois, mois et jours, jours et heures, heures et minutes).
+ * Ex. « 20 ans », « 1 mois et 3 jours », « 3 jours et 4 heures », « 12 minutes ».
  */
 export function humanDuration(from: number, to: number): string {
   const b = breakdown(from, to);
   const units: [number, Key, Key][] = [
     [b.years, 'dur.year', 'dur.years'],
     [b.months, 'dur.month', 'dur.months'],
-    [b.weeks, 'dur.week', 'dur.weeks'],
     [b.days, 'dur.day', 'dur.days'],
     [b.hours, 'dur.hour', 'dur.hours'],
     [b.minutes, 'dur.minute', 'dur.minutes'],

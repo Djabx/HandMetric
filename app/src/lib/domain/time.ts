@@ -53,7 +53,6 @@ export function addMonths(ms: number, months: number): number {
 export interface Breakdown {
   years: number;
   months: number;
-  weeks: number;
   days: number;
   hours: number;
   minutes: number;
@@ -76,8 +75,7 @@ export function breakdown(from: number, to: number): Breakdown {
   return {
     years: Math.floor(months / 12),
     months: months % 12,
-    weeks: Math.floor(days / 7),
-    days: days % 7,
+    days,
     hours,
     minutes,
     seconds: Math.floor(rest / 1000),

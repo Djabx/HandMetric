@@ -24,7 +24,7 @@ describe('time', () => {
     expect(periodKey('2026-11-23', 'week')).toBe('2026-11-23');
     expect(new Date(addMonths(Date.parse('2026-01-31T00:00:00Z'), 1)).toISOString().slice(0, 10)).toBe('2026-02-28');
     const b = breakdown(Date.parse('2026-01-01T00:00:00Z'), Date.parse('2026-07-03T05:00:00Z'));
-    expect(b).toMatchObject({ years: 0, months: 6, weeks: 0, days: 2, hours: 5 });
+    expect(b).toMatchObject({ years: 0, months: 6, days: 2, hours: 5 });
   });
 });
 
