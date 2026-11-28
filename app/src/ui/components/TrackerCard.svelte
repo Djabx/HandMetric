@@ -1,6 +1,6 @@
 <script lang="ts">
   import { db } from '../../lib/db/client';
-  import { fmtNumber, fmtRelative, humanDuration, sinceLabel, t } from '../../lib/i18n/index.svelte';
+  import { fmtNumber, fmtRelative, fmtShortDate, humanDuration, sinceLabel, t, untilLabel } from '../../lib/i18n/index.svelte';
   import { TALLY_MAX, tileSize } from '../../lib/domain/tile';
   import { unitLabel } from '../../lib/templates';
   import { toast, type TrackerView } from '../../lib/state.svelte';
@@ -21,6 +21,8 @@
       : [],
   );
   const last = $derived(measured.at(-1) ?? null);
+  /** Next planned event, shown as a countdown under the tile's main figure. */
+  const next = $derived(view.upcoming[0] ?? null);
   /** « 12,5 / 8 » : une valeur par mesure ; l'unité seulement si elle est commune. */
   const lastValue = $derived.by(() => {
     if (!last) return '';
@@ -98,6 +100,13 @@
     {#if view.goal && !tally && size !== 'small'}
       <GoalBar goal={view.goal} compact />
     {/if}
+    {#if next}
+      {@const at = Date.parse(next.occurred_at)}
+      <span class="next" title={next.note ?? undefined}>
+        <span aria-hidden="true">📅</span>
+        <span class="until">{untilLabel(at, now, size === 'small' ? 'bare' : 'short')}</span>{#if size !== 'small'}<span class="when"> · {next.note || fmtShortDate(at, now)}</span>{/if}
+      </span>
+    {/if}
   </button>
   <button class="log" onclick={log} aria-label="{t('dash.log')} {tr.name}">{t('dash.log')}</button>
 </article>
@@ -139,6 +148,14 @@
   .big { font-family: var(--font-display); font-size: 1.45rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
   .wide .big { font-size: 2rem; }
   .sub { color: var(--muted); font-size: 0.8rem; }
+  .next {
+    display: flex; align-items: center; gap: 6px; min-width: 0; justify-self: start; max-width: 100%;
+    padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 0.8rem; white-space: nowrap;
+    background: color-mix(in srgb, var(--c) 14%, var(--surface)); border: 1px dashed color-mix(in srgb, var(--c) 55%, transparent);
+  }
+  .small .next { padding: 2px 8px 2px 6px; gap: 4px; }
+  .next .until { flex: none; font-weight: 700; }
+  .next .when { min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
   .log {
     justify-self: start; border: 0; cursor: pointer; border-radius: 999px;
     min-height: 40px; min-width: 64px; padding: 0 16px;

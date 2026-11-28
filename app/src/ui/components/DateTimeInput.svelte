@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Sélecteur date + heure : un bouton qui affiche l'instant choisi, et qui ouvre un
-   * calendrier (semaine du lundi, jours futurs désactivés) et deux grilles à toucher pour
+   * calendrier (semaine du lundi ; les jours futurs servent aux événements prévus) et deux grilles à toucher pour
    * l'heure (00 à 23) et les minutes (de 5 en 5). Même rendu dans tous les navigateurs,
    * toujours jour/mois et 24 h, quelle que soit la langue du navigateur.
    * value : instant en millisecondes, interprété en heure locale.
@@ -42,7 +42,6 @@
     return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
   });
   const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  const canNext = $derived(new Date(shown.getFullYear(), shown.getMonth() + 1, 1).getTime() <= today);
 
   function set(y: number, mo: number, d: number, h: number, mi: number) {
     value = new Date(y, mo, d, h, mi).getTime();
@@ -81,7 +80,7 @@
       <div class="month">
         <button type="button" class="nav" onclick={() => move(-1)} aria-label={t('dt.prevMonth')}>‹</button>
         <span>{monthTitle}</span>
-        <button type="button" class="nav" onclick={() => move(1)} disabled={!canNext} aria-label={t('dt.nextMonth')}>›</button>
+        <button type="button" class="nav" onclick={() => move(1)} aria-label={t('dt.nextMonth')}>›</button>
       </div>
       <div class="cal" role="group" aria-label={monthTitle}>
         {#each weekdays as w, i (i)}<span class="wd" aria-hidden="true">{w}</span>{/each}
@@ -93,7 +92,6 @@
             class:today={d.getTime() === today}
             aria-pressed={sameDay(d, sel)}
             aria-label={dayLabel(d)}
-            disabled={d.getTime() > today}
             onclick={() => pickDay(d)}>{d.getDate()}</button>
         {/each}
       </div>
