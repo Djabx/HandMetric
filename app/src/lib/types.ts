@@ -32,6 +32,8 @@ export interface Tracker extends SyncMeta {
   tile?: TileSize | null;
   /** Show the next planned event big on the tile (a countdown), rather than the past. */
   show_next?: number | null;
+  /** Tracks periods, with a start and an end (sleep, fasting): 1. Instant events otherwise. */
+  span?: number | null;
 }
 
 export interface TrackerField extends SyncMeta {
@@ -52,6 +54,8 @@ export interface LifeEvent extends SyncMeta {
   tz_offset: number;
   measures: Measures | null;
   note: string | null;
+  /** End of a period (span trackers). Null: an instant event, or a period still running. */
+  ended_at?: string | null;
 }
 
 /** Ligne brute telle que stockée / échangée (measures en JSON texte). */
@@ -76,7 +80,7 @@ export interface MergeSummary {
 
 export type TrackerInput = Pick<
   Tracker,
-  'name' | 'icon' | 'color' | 'polarity' | 'display_mode' | 'goal_kind' | 'goal_count' | 'goal_period' | 'achievements' | 'tile' | 'show_next'
+  'name' | 'icon' | 'color' | 'polarity' | 'display_mode' | 'goal_kind' | 'goal_count' | 'goal_period' | 'achievements' | 'tile' | 'show_next' | 'span'
 > & { id?: string };
 
 export type FieldInput = { id?: string; name: string; unit: string | null };
@@ -88,4 +92,6 @@ export type EventInput = {
   tz_offset?: number;
   measures?: Measures | null;
   note?: string | null;
+  /** End of a period: undefined keeps the current one, null means still running. */
+  ended_at?: string | null;
 };

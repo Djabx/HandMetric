@@ -12,6 +12,8 @@ export interface Template {
   display_mode: DisplayMode;
   /** Countdown to the next planned event on the tile. */
   show_next?: boolean;
+  /** Periods with a start and an end. */
+  span?: boolean;
   goal?: { kind: GoalKind; count: number; period: Period };
   fields?: { name: Key; unit: string }[];
   /** Trophées forcés (sinon : selon le type). */

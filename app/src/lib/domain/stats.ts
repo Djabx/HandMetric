@@ -1,4 +1,5 @@
 import type { ChartPeriod, LifeEvent, Period, Tracker, TrackerField } from '../types';
+import { durationOf, isSpan } from './span';
 import { DAY, addMonths, dayKey, dayNumber, keyFromDayNumber, periodKey, previousPeriod } from './time';
 
 export interface Gap {
@@ -25,7 +26,8 @@ export interface TrackerStats {
   perDay: Map<string, number>;
 }
 
-const evMs = (e: LifeEvent) => Date.parse(e.occurred_at);
+/** When an event happened: its end for a period (a night counts for the morning it ends). */
+const evMs = (e: LifeEvent) => Date.parse(e.ended_at ?? e.occurred_at);
 export const evDay = (e: LifeEvent) => dayKey(evMs(e), e.tz_offset);
 
 /** Statistiques d'un compteur. `events` : non supprimés, dans n'importe quel ordre. */
@@ -102,11 +104,13 @@ export function periodSeries(
   now: number,
   tzOffset: number,
   offset = 0,
+  /** What an event weighs: 1 by default (a count), or its length for instance. */
+  weight: (e: LifeEvent) => number = () => 1,
 ): { key: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const e of events) {
     const k = periodKey(evDay(e), period);
-    counts.set(k, (counts.get(k) ?? 0) + 1);
+    counts.set(k, (counts.get(k) ?? 0) + weight(e));
   }
   const out: { key: string; count: number }[] = [];
   let k = periodKey(dayKey(now, tzOffset), period);
@@ -130,15 +134,18 @@ export interface GoalStatus {
   /** Périodes terminées consécutives où l'objectif a été tenu. */
   streak: number;
   bestStreak: number;
+  /** What target and current count: events, or minutes of periods (span trackers). */
+  unit: 'count' | 'minutes';
 }
 
 export function goalStatus(tracker: Tracker, events: LifeEvent[], now: number, tzOffset: number): GoalStatus | null {
   const { goal_kind: kind, goal_count: target, goal_period: period } = tracker;
   if (!kind || target === null || target === undefined || !period) return null;
+  const minutes = isSpan(tracker);
   const counts = new Map<string, number>();
   for (const e of events) {
     const k = periodKey(evDay(e), period);
-    counts.set(k, (counts.get(k) ?? 0) + 1);
+    counts.set(k, (counts.get(k) ?? 0) + (minutes ? Math.round(durationOf(e) / 60_000) : 1));
   }
   const ok = (n: number) => (kind === 'max' ? n <= target : n >= target);
   const currentKey = periodKey(dayKey(now, tzOffset), period);
@@ -160,7 +167,7 @@ export function goalStatus(tracker: Tracker, events: LifeEvent[], now: number, t
     run = ok(counts.get(key) ?? 0) ? run + 1 : 0;
     bestStreak = Math.max(bestStreak, run);
   }
-  return { kind, target, period, current, met: ok(current), streak: run, bestStreak };
+  return { kind, target, period, current, met: ok(current), streak: run, bestStreak, unit: minutes ? 'minutes' : 'count' };
 }
 
 // ---------- mesures ----------

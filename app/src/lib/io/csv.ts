@@ -15,17 +15,25 @@ export function localIso(e: Pick<LifeEvent, 'occurred_at' | 'tz_offset'>): strin
   return new Date(ms).toISOString().slice(0, 19) + off;
 }
 
-/** Export CSV « lecture seule » : une ligne par événement, une colonne par mesure. */
+/** Export CSV « lecture seule » : une ligne par événement, une colonne par mesure. Les périodes ont une fin et une durée (minutes). */
 export function toCsv(trackers: Tracker[], fields: TrackerField[], events: LifeEvent[]): string {
   const byId = new Map(trackers.map((t) => [t.id, t]));
   const cols = fields.filter((f) => byId.has(f.tracker_id));
-  const header = ['tracker', 'local_time', 'utc_time', 'note', ...cols.map((f) => `${byId.get(f.tracker_id)!.name} / ${f.name}${f.unit ? ` (${f.unit})` : ''}`)];
+  const header = ['tracker', 'local_time', 'utc_time', 'local_end', 'duration_min', 'note', ...cols.map((f) => `${byId.get(f.tracker_id)!.name} / ${f.name}${f.unit ? ` (${f.unit})` : ''}`)];
   const lines = [header.map(cell).join(',')];
   for (const e of events) {
     const t = byId.get(e.tracker_id);
     if (!t) continue;
     lines.push(
-      [t.name, localIso(e), e.occurred_at, e.note, ...cols.map((f) => (f.tracker_id === e.tracker_id ? e.measures?.[f.id] : null))]
+      [
+        t.name,
+        localIso(e),
+        e.occurred_at,
+        e.ended_at ? localIso({ occurred_at: e.ended_at, tz_offset: e.tz_offset }) : null,
+        e.ended_at ? Math.round((Date.parse(e.ended_at) - Date.parse(e.occurred_at)) / 60_000) : null,
+        e.note,
+        ...cols.map((f) => (f.tracker_id === e.tracker_id ? e.measures?.[f.id] : null)),
+      ]
         .map(cell)
         .join(','),
     );

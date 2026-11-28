@@ -136,6 +136,7 @@ export class Store {
       achievements: input.achievements === undefined ? (existing?.achievements ?? null) : input.achievements,
       tile: input.tile === undefined ? (existing?.tile ?? null) : input.tile,
       show_next: input.show_next === undefined ? (existing?.show_next ?? null) : input.show_next ? 1 : null,
+      span: input.span === undefined ? (existing?.span ?? null) : input.span ? 1 : null,
       created_at: existing?.created_at ?? nowIso(),
       updated_at: stamp,
       deleted_at: null,
@@ -240,6 +241,9 @@ export class Store {
     const occurred = input.occurred_at ? new Date(input.occurred_at) : new Date();
     if (Number.isNaN(occurred.getTime())) throw new Error('Date invalide');
     const measures = input.measures && Object.keys(input.measures).length ? input.measures : null;
+    const endRaw = input.ended_at === undefined ? (existing?.ended_at ?? null) : input.ended_at;
+    const ended = endRaw ? new Date(endRaw) : null;
+    if (ended && (Number.isNaN(ended.getTime()) || ended.getTime() < occurred.getTime())) throw new Error('La fin doit suivre le début');
     const e: LifeEvent = {
       id: existing?.id ?? input.id ?? uuidv7(occurred.getTime() <= Date.now() ? Date.now() : occurred.getTime()),
       tracker_id: input.tracker_id,
@@ -247,6 +251,7 @@ export class Store {
       tz_offset: input.tz_offset ?? localOffset(occurred),
       measures,
       note: input.note?.trim() || null,
+      ended_at: ended ? ended.toISOString() : null,
       created_at: existing?.created_at ?? nowIso(),
       updated_at: this.hlc.now(),
       deleted_at: null,
@@ -593,6 +598,8 @@ function sanitize(table: SyncTable, raw: Row): Row | null {
   if (table === 'tracker' && row.sort_order === null) row.sort_order = 0;
   if (table === 'tracker' && row.achievements !== null && row.achievements !== 0 && row.achievements !== 1) row.achievements = null;
   if (table === 'tracker' && row.tile !== null && !(TILE_SIZES as readonly unknown[]).includes(row.tile)) row.tile = null;
+  if (table === 'tracker' && row.span !== null && row.span !== 0 && row.span !== 1) row.span = null;
+  if (table === 'event' && row.ended_at !== null && (typeof row.ended_at !== 'string' || Number.isNaN(Date.parse(row.ended_at)))) row.ended_at = null;
   if (table === 'tracker' && row.show_next !== null && row.show_next !== 0 && row.show_next !== 1) row.show_next = null;
   if (table === 'tracker_field' && row.sort_order === null) row.sort_order = 0;
   if (table === 'event' && row.measures !== null) {

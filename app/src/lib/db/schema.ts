@@ -8,7 +8,7 @@ export type SyncTable = (typeof SYNC_TABLES)[number];
 export const COLUMNS: Record<SyncTable, readonly string[]> = {
   tracker: [
     'id', 'name', 'icon', 'color', 'polarity', 'display_mode',
-    'goal_kind', 'goal_count', 'goal_period', 'sort_order', 'archived_at', 'achievements', 'tile', 'show_next',
+    'goal_kind', 'goal_count', 'goal_period', 'sort_order', 'archived_at', 'achievements', 'tile', 'show_next', 'span',
     'created_at', 'updated_at', 'deleted_at', 'device_id',
   ],
   tracker_field: [
@@ -16,7 +16,7 @@ export const COLUMNS: Record<SyncTable, readonly string[]> = {
     'created_at', 'updated_at', 'deleted_at', 'device_id',
   ],
   event: [
-    'id', 'tracker_id', 'occurred_at', 'tz_offset', 'measures', 'note',
+    'id', 'tracker_id', 'occurred_at', 'tz_offset', 'measures', 'note', 'ended_at',
     'created_at', 'updated_at', 'deleted_at', 'device_id',
   ],
 };
@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS tracker (
   tile         TEXT,
   -- Mettre en avant le prochain événement prévu (compte à rebours) : NULL ou 0 = non, 1 = oui.
   show_next    INTEGER,
+  -- Compteur de périodes, avec un début et une fin (sommeil, jeûne) : NULL ou 0 = non, 1 = oui.
+  span         INTEGER,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,
@@ -72,6 +74,8 @@ CREATE TABLE IF NOT EXISTS event (
   tz_offset    INTEGER NOT NULL,
   measures     TEXT,
   note         TEXT,
+  -- Fin d'une période (instant UTC), pour un compteur de périodes. NULL : instant, ou période en cours.
+  ended_at     TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,
@@ -86,6 +90,8 @@ export const ADDED_COLUMNS: { table: SyncTable; column: string; type: string }[]
   { table: 'tracker', column: 'achievements', type: 'INTEGER' },
   { table: 'tracker', column: 'tile', type: 'TEXT' },
   { table: 'tracker', column: 'show_next', type: 'INTEGER' },
+  { table: 'tracker', column: 'span', type: 'INTEGER' },
+  { table: 'event', column: 'ended_at', type: 'TEXT' },
 ];
 
 /**

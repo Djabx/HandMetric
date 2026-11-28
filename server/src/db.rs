@@ -52,6 +52,7 @@ fn columns(table: &str) -> &'static [(&'static str, Ty)] {
             ("achievements", OptInt),
             ("tile", OptText),
             ("show_next", OptInt),
+            ("span", OptInt),
             ("created_at", Text),
             ("updated_at", Text),
             ("deleted_at", OptText),
@@ -75,6 +76,7 @@ fn columns(table: &str) -> &'static [(&'static str, Ty)] {
             ("tz_offset", Int),
             ("measures", OptText),
             ("note", OptText),
+            ("ended_at", OptText),
             ("created_at", Text),
             ("updated_at", Text),
             ("deleted_at", OptText),
@@ -205,6 +207,7 @@ const PG_MIGRATIONS: &[&str] = &[
     include_str!("../migrations/postgres/0003_purge.sql"),
     include_str!("../migrations/postgres/0004_tile.sql"),
     include_str!("../migrations/postgres/0005_show_next.sql"),
+    include_str!("../migrations/postgres/0006_span.sql"),
 ];
 const SQLITE_MIGRATIONS: &[&str] = &[
     include_str!("../migrations/sqlite/0001_init.sql"),
@@ -212,6 +215,7 @@ const SQLITE_MIGRATIONS: &[&str] = &[
     include_str!("../migrations/sqlite/0003_purge.sql"),
     include_str!("../migrations/sqlite/0004_tile.sql"),
     include_str!("../migrations/sqlite/0005_show_next.sql"),
+    include_str!("../migrations/sqlite/0006_span.sql"),
 ];
 
 impl Db {

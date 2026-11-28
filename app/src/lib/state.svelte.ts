@@ -5,6 +5,7 @@ import { computeStats, goalStatus, type GoalStatus, type TrackerStats } from './
 import { achievements, type Achievement } from './domain/achievements';
 import { localOffset, type DeletedEvent } from './db/store';
 import { needsCompletion } from './domain/planned';
+import { isSpan, spanStats, type SpanStats } from './domain/span';
 
 export const app = $state({
   ready: false,
@@ -38,6 +39,10 @@ export interface TrackerView {
   upcoming: LifeEvent[];
   /** Past planned events still missing their measures, oldest first. */
   todo: LifeEvent[];
+  /** Span trackers: the period started and not ended yet. */
+  running: LifeEvent | null;
+  /** Span trackers: lengths and times of the periods. */
+  span: SpanStats | null;
   stats: TrackerStats;
   goal: GoalStatus | null;
   achievements: Achievement[];
@@ -47,9 +52,15 @@ export interface TrackerView {
 export function viewOf(tracker: Tracker, now: number): TrackerView {
   const events: LifeEvent[] = [];
   const upcoming: LifeEvent[] = [];
+  const spans = isSpan(tracker);
+  let running: LifeEvent | null = null;
   for (const e of app.events) {
     if (e.tracker_id !== tracker.id) continue;
-    (Date.parse(e.occurred_at) > now ? upcoming : events).push(e);
+    if (Date.parse(e.occurred_at) > now) upcoming.push(e);
+    // A period without an end is still running: it counts once it ends.
+    else if (spans && !e.ended_at) {
+      if (!running || e.occurred_at > running.occurred_at) running = e;
+    } else events.push(e);
   }
   upcoming.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
   const fields = app.fields.filter((f) => f.tracker_id === tracker.id);
@@ -57,7 +68,7 @@ export function viewOf(tracker: Tracker, now: number): TrackerView {
   const tz = localOffset();
   const stats = computeStats(tracker, events, now, tz);
   const goal = goalStatus(tracker, events, now, tz);
-  return { tracker, fields, events, upcoming, todo, stats, goal, achievements: achievements(tracker, stats, goal) };
+  return { tracker, fields, events, upcoming, todo, running, span: spans ? spanStats(events) : null, stats, goal, achievements: achievements(tracker, stats, goal) };
 }
 
 // ---------- toasts ----------

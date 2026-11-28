@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t } from '../../lib/i18n/index.svelte';
+  import { clockDuration, t } from '../../lib/i18n/index.svelte';
   import type { GoalStatus } from '../../lib/domain/stats';
 
   let { goal, compact = false }: { goal: GoalStatus; compact?: boolean } = $props();
@@ -7,7 +7,9 @@
   const over = $derived(goal.kind === 'max' && goal.current > goal.target);
   const color = $derived(over ? 'var(--bad)' : goal.met ? 'var(--good)' : 'var(--accent)');
   const label = $derived(
-    t('detail.goal.progress', { current: goal.current, target: goal.target, when: t(`period.this.${goal.period}`) }),
+    goal.unit === 'minutes'
+      ? t('detail.goal.progress', { current: clockDuration(goal.current * 60_000), target: clockDuration(goal.target * 60_000), when: t(`period.this.${goal.period}`) })
+      : t('detail.goal.progress', { current: goal.current, target: goal.target, when: t(`period.this.${goal.period}`) }),
   );
 </script>
 

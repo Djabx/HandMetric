@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS tracker (
   tile         TEXT,
   -- Mettre en avant le prochain événement prévu (compte à rebours) : NULL ou 0 = non, 1 = oui.
   show_next    INTEGER,
+  -- Compteur de périodes, avec un début et une fin (sommeil, jeûne) : NULL ou 0 = non, 1 = oui.
+  span         INTEGER,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,
@@ -47,6 +49,8 @@ CREATE TABLE IF NOT EXISTS event (
   tz_offset    INTEGER NOT NULL,
   measures     TEXT,
   note         TEXT,
+  -- Fin d'une période (instant UTC), pour un compteur de périodes. NULL : instant, ou période en cours.
+  ended_at     TEXT,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,

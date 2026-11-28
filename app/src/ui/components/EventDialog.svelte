@@ -1,6 +1,7 @@
 <script lang="ts">
   import { db } from '../../lib/db/client';
-  import { fmtDateTime, t, untilLabel } from '../../lib/i18n/index.svelte';
+  import { clockDuration, fmtDateTime, t, untilLabel } from '../../lib/i18n/index.svelte';
+  import { isSpan } from '../../lib/domain/span';
   import { unitLabel } from '../../lib/templates';
   import type { LifeEvent, Tracker, TrackerField } from '../../lib/types';
   import { toast } from '../../lib/state.svelte';
@@ -12,13 +13,19 @@
     fields,
     event = null,
     mode = 'done',
+    typical = 3_600_000,
+    usualStart = null,
     onclose,
   }: {
     tracker: Tracker;
     fields: TrackerField[];
     event?: LifeEvent | null;
-    /** For a new event: already happened, or planned for later. */
-    mode?: 'done' | 'plan';
+    /** For a new event: already happened, or planned for later. `stop`: end a running period now. */
+    mode?: 'done' | 'plan' | 'stop';
+    /** Span trackers: usual length of a period, to suggest an end (ms). */
+    typical?: number;
+    /** Span trackers: usual start time, in minutes after midnight (bedtime), to suggest a start. */
+    usualStart?: number | null;
     onclose: () => void;
   } = $props();
 
@@ -36,7 +43,48 @@
   }
 
   // svelte-ignore state_referenced_locally
-  let when = $state(event ? Date.parse(event.occurred_at) : mode === 'plan' ? defaultPlanned() : Date.now());
+  const spans = isSpan(tracker);
+  /**
+   * Span trackers: the last (or, planned, the next) usual start, so that « earlier… » on a
+   * sleep tracker suggests last night rather than the last hours.
+   */
+  function usual(future: boolean): number | null {
+    if (usualStart === null) return null;
+    const d = new Date();
+    d.setHours(0, Math.round(usualStart / 5) * 5, 0, 0);
+    let at = d.getTime();
+    if (future) while (at <= Date.now() + PLANNED_SLACK) at += 86_400_000;
+    else while (at + typical > Date.now()) at -= 86_400_000;
+    return at;
+  }
+  // svelte-ignore state_referenced_locally
+  let when = $state(
+    event
+      ? Date.parse(event.occurred_at)
+      : mode === 'plan'
+        ? (spans ? usual(true) : null) ?? defaultPlanned()
+        : spans
+          ? (usual(false) ?? Date.now() - typical)
+          : Date.now(),
+  );
+  /** Span trackers: end of the period. */
+  // svelte-ignore state_referenced_locally
+  let end = $state(
+    event?.ended_at
+      ? Date.parse(event.ended_at)
+      : mode === 'stop'
+        ? Date.now()
+        : event
+          ? Date.parse(event.occurred_at) + typical
+          : Math.min(when + typical, mode === 'plan' ? Infinity : Date.now()),
+  );
+  /** Span trackers: the period is still running (no end yet). */
+  // svelte-ignore state_referenced_locally
+  let ongoing = $state(spans && !!event && !event.ended_at && mode !== 'stop' && Date.parse(event.occurred_at) <= Date.now());
+  $effect(() => {
+    // Moving the start past the end pushes the end along.
+    if (spans && end <= when) end = when + typical;
+  });
   // svelte-ignore state_referenced_locally
   let note = $state(event?.note ?? '');
   // svelte-ignore state_referenced_locally
@@ -55,22 +103,35 @@
   });
 
   function setPlanned(on: boolean) {
-    if (on && !planned) when = defaultPlanned();
-    if (!on && planned) when = Date.now();
+    if (on && !planned) {
+      when = (spans ? usual(true) : null) ?? defaultPlanned();
+      end = when + typical;
+      ongoing = false;
+    }
+    if (!on && planned) {
+      when = spans ? (usual(false) ?? Date.now() - typical) : Date.now();
+      end = spans ? Math.min(when + typical, Date.now()) : when;
+    }
   }
+  /** Measures can wait while the event is planned, or the period still running. */
+  const optional = $derived(planned || (spans && ongoing));
 
   async function save(e: SubmitEvent) {
     e.preventDefault();
     const measures: Record<string, number> = {};
     for (const f of fields) {
       const raw = values[f.id]?.trim() ?? '';
-      if (!raw && planned) continue;
+      if (!raw && optional) continue;
       const n = Number(raw.replace(',', '.') || NaN);
       if (!Number.isFinite(n)) {
         toast(t('event.measureRequired'));
         return;
       }
       measures[f.id] = n;
+    }
+    if (spans && !ongoing && end <= when) {
+      toast(t('span.endBeforeStart'));
+      return;
     }
     busy = true;
     try {
@@ -82,6 +143,7 @@
         tz_offset: -date.getTimezoneOffset(),
         measures,
         note,
+        ...(spans ? { ended_at: ongoing && !planned ? null : new Date(end).toISOString() } : {}),
       });
       if (!event)
         toast(planned ? t('up.planned', { name: tracker.name, when: untilLabel(when, Date.now()) }) : t('dash.logged', { name: tracker.name }), {
@@ -122,25 +184,37 @@
       </div>
     {/if}
     <div class="field">
-      <span>{t('event.when')}</span>
-      <DateTimeInput bind:value={when} label={t('event.when')} future={planned} />
+      <span>{spans ? t('span.start') : t('event.when')}</span>
+      <DateTimeInput bind:value={when} label={spans ? t('span.start') : t('event.when')} future={planned} />
       {#if planned}<p class="small muted planned">📅 {t('up.hint', { when: untilLabel(when, Date.now()) })}</p>{/if}
     </div>
+    {#if spans}
+      <div class="field">
+        <span>{t('span.stop')}</span>
+        {#if !planned}
+          <label class="check"><input type="checkbox" bind:checked={ongoing} /> {t('span.running')}</label>
+        {/if}
+        {#if !ongoing || planned}
+          <DateTimeInput bind:value={end} label={t('span.stop')} future={planned} />
+          <p class="length">{clockDuration(end - when)}</p>
+        {/if}
+      </div>
+    {/if}
     {#each fields as f (f.id)}
       <label class="field">
         <span class="measure">
           <span>{f.name}{f.unit ? ` (${unitLabel(f.unit)})` : ''}</span>
-          {#if planned}<span class="small muted optional">{t('up.optional')}</span>{/if}
+          {#if optional}<span class="small muted optional">{t('up.optional')}</span>{/if}
         </span>
         <input
           type="text"
           inputmode="decimal"
-          class:later={planned}
+          class:later={optional}
           bind:value={values[f.id]}
           autocomplete="off"
-          required={!planned}
+          required={!optional}
           pattern={NUMBER}
-          placeholder={planned ? t('up.later') : undefined}
+          placeholder={optional ? t('up.later') : undefined}
           title={t('event.measureRequired')}
         />
       </label>
@@ -174,5 +248,8 @@
   .mode { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
   .measure { display: flex; justify-content: space-between; gap: 8px; }
   .optional { font-weight: 400; }
+  .check { display: flex; align-items: center; gap: 8px; font-weight: 400; }
+  .check input { width: auto; }
+  .length { margin: 2px 0 0; text-align: center; font-family: var(--font-display); font-size: 1.5rem; font-weight: 800; }
   input.later { border-style: dashed; background: var(--bg); }
 </style>

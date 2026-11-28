@@ -25,6 +25,11 @@
   let mode = $state<DisplayMode>(existing?.display_mode ?? tpl?.display_mode ?? 'frequency');
   /** Countdown to the next planned event instead of the past (concerts, appointments). */
   let showNext = $state<boolean>(!!(existing?.show_next ?? tpl?.show_next));
+  /** Periods with a start and an end (sleep, fasting), rather than instant events. */
+  let span = $state<boolean>(!!(existing?.span ?? tpl?.span));
+  /** The goal of a span tracker is a length, entered in hours and stored in minutes. */
+  // svelte-ignore state_referenced_locally
+  let goalHours = $state<number>(span ? (existing?.goal_count ?? tpl?.goal?.count ?? 420) / 60 : 7);
   let goalKind = $state<GoalKind | ''>(existing?.goal_kind ?? tpl?.goal?.kind ?? '');
   let goalCount = $state<number>(existing?.goal_count ?? tpl?.goal?.count ?? 1);
   let goalPeriod = $state<Period>(existing?.goal_period ?? tpl?.goal?.period ?? 'week');
@@ -39,7 +44,7 @@
   const trophiesOn = $derived(achievementsEnabled({ achievements: trophies, polarity }));
   /** Taille de la tuile : null = automatique. */
   let tile = $state<TileSize | null>(existing?.tile ?? null);
-  const autoTile = $derived(tileSize({ tile: null, display_mode: mode, goal_count: goalKind ? goalCount : null }, fields.length));
+  const autoTile = $derived(tileSize({ tile: null, display_mode: mode, span: span ? 1 : null, goal_count: goalKind && !span ? goalCount : null }, fields.length));
   /** Schéma 6 × 2 de chaque taille : cases remplies. */
   const MINI: Record<TileSize | 'auto', number[]> = {
     auto: [], small: [0, 1], normal: [0, 1, 2], wide: [0, 1, 2, 3, 4, 5], tall: [0, 1, 2, 6, 7, 8],
@@ -66,10 +71,11 @@
           polarity,
           display_mode: mode,
           goal_kind: goalKind || null,
-          goal_count: goalKind ? goalCount : null,
+          goal_count: goalKind ? (span ? Math.round(goalHours * 60) : goalCount) : null,
+          span: span ? 1 : null,
           achievements: trophies,
           tile,
-          show_next: showNext ? 1 : null,
+          show_next: showNext && !span ? 1 : null,
           goal_period: goalKind ? goalPeriod : null,
         },
         $state.snapshot(fields).map((f) => ({ id: f.id, name: f.name, unit: f.unit || null })),
@@ -148,6 +154,16 @@
       </div>
 
       <div class="field">
+        <span>{t('form.kind')}</span>
+        <div class="segmented">
+          <button type="button" aria-pressed={!span} onclick={() => (span = false)}>⚡ {t('form.kind.instant')}</button>
+          <button type="button" aria-pressed={span} onclick={() => (span = true)}>⏱️ {t('form.kind.span')}</button>
+        </div>
+        <span class="small muted">{t(span ? 'form.kind.spanHelp' : 'form.kind.instantHelp')}</span>
+      </div>
+
+      {#if !span}
+      <div class="field">
         <span>{t('form.mode')}</span>
         <div class="segmented">
           {#each ['abstinence', 'frequency'] as const as m (m)}
@@ -157,6 +173,7 @@
         </div>
         {#if showNext}<span class="small muted">{t('form.mode.nextHelp')}</span>{/if}
       </div>
+      {/if}
 
       <div class="field">
         <span>{t('form.goal')}</span>
@@ -167,8 +184,13 @@
         </div>
         {#if goalKind}
           <div class="row">
-            <input type="number" min="0" max="10000" bind:value={goalCount} style="width:96px" aria-label={t('form.goal')} />
-            <span>{t('form.goal.times')}</span>
+            {#if span}
+              <input type="number" min="0" max="1000" step="0.25" bind:value={goalHours} style="width:96px" aria-label={t('form.goal')} />
+              <span>{t('form.goal.hoursPer')}</span>
+            {:else}
+              <input type="number" min="0" max="10000" bind:value={goalCount} style="width:96px" aria-label={t('form.goal')} />
+              <span>{t('form.goal.times')}</span>
+            {/if}
             <select bind:value={goalPeriod} style="width:auto">
               <option value="day">{t('period.day')}</option>
               <option value="week">{t('period.week')}</option>

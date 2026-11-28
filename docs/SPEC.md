@@ -70,6 +70,7 @@ LifeLog est une **application pour soi**, pas une vitrine : rien n'est partagé 
 - Taille de la tuile sur l'accueil, au choix par compteur (colonne `tracker.tile` : NULL = automatique, sinon `small`, `normal`, `wide`, `tall`). En automatique : large pour l'abstinence et les compteurs avec mesures (dernière valeur et courbe), haute pour un objectif de 15 ou moins (bâtons), normale sinon. Grille de 6 colonnes sur téléphone (12 sur grand écran) : petite = 2, normale ou haute = 3, large = toute la ligne (6 sur grand écran).
 - Événements prévus : un événement daté dans le futur ne compte qu'une fois sa date passée. On le crée en une fois (menu ▾ du +1, ou bouton Prévoir de la fiche). Ses mesures sont facultatives tant qu'il est prévu. Une fois passé, s'il lui manque des mesures (créé avant sa date), il est « à compléter » : on enregistre ses valeurs, on remet à plus tard, ou on le retire (pas fait).
 - Compte à rebours au choix par compteur (colonne `tracker.show_next` : NULL ou 0 = non, 1 = oui). La tuile et la fiche mettent alors en avant le prochain événement prévu (« dans 1 mois », date et note), ou « Rien de prévu ». Pour des concerts ou des rendez-vous, l'avenir compte plus que le passé.
+- Compteurs de périodes, avec un début et une fin : sommeil, jeûne, travail (colonne `tracker.span` : NULL ou 0 = non, 1 = oui ; colonne `event.ended_at`, NULL tant que la période est en cours). La tuile a un bouton Début, puis Fin, et montre le chrono en direct. On peut aussi saisir après coup le début et la fin. Une période compte pour le jour où elle finit (une nuit compte pour le matin). Statistiques en durées (« 7 h 25 », jamais de secondes ni de jours) : dernière, moyenne, plus longue, heures moyennes de début et de fin, les dernières périodes en barres sur un axe horaire commun. L'objectif porte sur le temps total (`goal_count` en minutes).
 - Les succès sont **calculés** à partir des événements, jamais stockés comme vérité (voir 4.3).
 - Une notification dans l'application quand un succès est débloqué pendant que l'app est ouverte.
 
@@ -151,6 +152,7 @@ CREATE TABLE event (
   tz_offset    INTEGER NOT NULL,          -- minutes, ex. +60 pour Paris en hiver
   measures     TEXT,                      -- JSON { "<field_id>": 5.2, … }, NULL si aucune mesure
   note         TEXT,
+  ended_at     TEXT,                      -- fin d'une période (compteur de périodes), NULL si instant ou en cours
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,             -- HLC
   deleted_at   TEXT,
@@ -308,7 +310,7 @@ API HTTP JSON, versionnée sous `/api/v1`. Authentification décrite en 5.5.
 | `POST` | `/api/v1/changes` | Envoi d'un lot de lignes modifiées. Le serveur applique la règle 5.2 et renvoie le nouveau `cursor` |
 | `POST` | `/api/v1/import` | Envoi d'un fichier `.lifelog.sqlite` ou JSON (multipart). Même fusion que `changes` |
 | `GET` | `/api/v1/export?format=sqlite\|json` | Télécharge toutes les données du compte |
-| `POST` | `/api/v1/trackers/{id}/events` | Ajoute un événement (corps facultatif : `occurred_at`, `measures`, `note`). Pour les scripts. |
+| `POST` | `/api/v1/trackers/{id}/events` | Ajoute un événement (corps facultatif : `occurred_at`, `ended_at` pour une période, `measures`, `note`). Pour les scripts. |
 | `POST` | `/hooks/{token}` | **Webhook entrant** : ajoute un événement au compteur lié au jeton. Aucun en-tête requis, pour les outils qui ne savent faire qu'un simple POST. |
 
 Cycle client :

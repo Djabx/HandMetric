@@ -86,6 +86,30 @@ export function humanDuration(from: number, to: number, short = false): string {
 }
 
 /**
+ * Length of a period, on a clock: « 7 h 25 », « 7 h », « 45 min ». Never seconds, never
+ * days: a night, a fast or a week of work all read in hours.
+ */
+export function clockDuration(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 60_000));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (!h) return t('dur.m', { m });
+  if (!m) return t('dur.h', { h });
+  return t('dur.hm', { h, m: String(m).padStart(2, '0') });
+}
+
+/** A time of day given in minutes after midnight: « 23:10 ». */
+export function fmtMinuteOfDay(min: number): string {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return new Intl.DateTimeFormat(locale(), { timeStyle: 'short', timeZone: 'UTC' }).format(Date.UTC(2026, 0, 1, 0, m));
+}
+
+/** A time of day of an instant, in local time: « 23:10 ». */
+export function fmtTime(ms: number): string {
+  return new Intl.DateTimeFormat(locale(), { timeStyle: 'short' }).format(ms);
+}
+
+/**
  * Countdown to a planned event. The same day: « dans 3 heures » ; then calendar days
  * (« demain », « dans 5 jours », whatever the hour) ; from a month on, the human duration
  * (« dans 1 mois et 3 jours »). `short` keeps the main unit only (« dans 1 mois ») and

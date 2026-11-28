@@ -1,9 +1,11 @@
 <script lang="ts">
-  let { data, color, target = null, labelOf }: {
+  let { data, color, target = null, labelOf, fmt = String }: {
     data: { key: string; count: number }[];
     color: string;
     target?: number | null;
     labelOf: (key: string) => string;
+    /** How a bar's value reads (a count by default). */
+    fmt?: (n: number) => string;
   } = $props();
   const step = $derived(Math.ceil(data.length / 6));
   const max = $derived(Math.max(1, target ?? 0, ...data.map((d) => d.count)));
@@ -14,8 +16,8 @@
     <div class="target" style:bottom="{(target / max) * 100}%" aria-hidden="true"></div>
   {/if}
   {#each data as d, i (d.key)}
-    <div class="col" title="{labelOf(d.key)} : {d.count}">
-      <span class="n">{d.count || ''}</span>
+    <div class="col" title="{labelOf(d.key)} : {fmt(d.count)}">
+      <span class="n">{d.count ? fmt(d.count) : ''}</span>
       <div class="bar" style:height="{(d.count / max) * 100}%"></div>
       <span class="lbl">{(data.length - 1 - i) % step === 0 ? labelOf(d.key) : ''}</span>
     </div>

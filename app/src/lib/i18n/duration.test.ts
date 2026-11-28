@@ -70,3 +70,14 @@ describe('untilLabel', () => {
     expect(untilLabel(new Date(2028, 0, 2).getTime(), now, 'short')).toBe('dans 1 an');
   });
 });
+
+describe('clockDuration', () => {
+  it('reads periods on a clock, in hours and minutes', async () => {
+    const { clockDuration } = await import('./index.svelte');
+    expect(clockDuration(445 * 60_000)).toBe('7 h 25');
+    expect(clockDuration(7 * 3_600_000)).toBe('7 h');
+    expect(clockDuration(45 * 60_000)).toBe('45 min');
+    expect(clockDuration(65 * 60_000)).toBe('1 h 05');
+    expect(clockDuration(36 * 3_600_000)).toBe('36 h');
+  });
+});

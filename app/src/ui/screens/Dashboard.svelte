@@ -25,7 +25,7 @@
   const views = $derived(
     lifted || settling ? liveOrder.map((id) => allViews.find((v) => v.tracker.id === id)).filter((v) => v !== undefined) : allViews,
   );
-  let logging = $state<{ view: TrackerView; mode?: 'done' | 'plan'; event?: LifeEvent } | null>(null);
+  let logging = $state<{ view: TrackerView; mode?: 'done' | 'plan' | 'stop'; event?: LifeEvent } | null>(null);
 
   // ---------- réorganisation ----------
   let reordering = $state(false);
@@ -311,7 +311,8 @@
 {/if}
 
 {#if logging}
-  <EventDialog tracker={logging.view.tracker} fields={logging.view.fields} mode={logging.mode} event={logging.event ?? null} onclose={() => (logging = null)} />
+  <EventDialog tracker={logging.view.tracker} fields={logging.view.fields} mode={logging.mode} event={logging.event ?? null} typical={logging.view.span?.avgMs ?? undefined}
+    usualStart={logging.view.span?.avgStart ?? null} onclose={() => (logging = null)} />
 {/if}
 
 <style>

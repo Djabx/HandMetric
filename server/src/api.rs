@@ -201,6 +201,8 @@ pub async fn export_data(
 #[derive(Deserialize, Default)]
 pub struct NewEvent {
     occurred_at: Option<String>,
+    /// End of a period (span trackers), RFC 3339.
+    ended_at: Option<String>,
     tz_offset: Option<i64>,
     note: Option<String>,
     /// Clés : id du champ ou nom (insensible à la casse).
@@ -221,6 +223,20 @@ async fn create_event(
             .map_err(|_| AppError::BadRequest("occurred_at : date RFC 3339 attendue".into()))?
             .with_timezone(&chrono::Utc),
         None => chrono::Utc::now(),
+    };
+    let ended_at = match &body.ended_at {
+        Some(s) => {
+            let end = chrono::DateTime::parse_from_rfc3339(s)
+                .map_err(|_| AppError::BadRequest("ended_at : date RFC 3339 attendue".into()))?
+                .with_timezone(&chrono::Utc);
+            if end < at {
+                return Err(AppError::BadRequest(
+                    "ended_at : la fin doit suivre le début".into(),
+                ));
+            }
+            json!(end.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+        }
+        None => Value::Null,
     };
     let tz_offset = body.tz_offset.unwrap_or_else(|| {
         i64::from(
@@ -262,6 +278,7 @@ async fn create_event(
         "occurred_at".into(),
         json!(at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
     );
+    row.insert("ended_at".into(), ended_at);
     row.insert("tz_offset".into(), json!(tz_offset));
     row.insert(
         "measures".into(),

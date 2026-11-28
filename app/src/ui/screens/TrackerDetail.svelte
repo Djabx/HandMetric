@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app, clock, viewOf } from '../../lib/state.svelte';
-  import { fmtDate, fmtDateTime, fmtNumber, fmtRelative, humanDuration, locale, sinceLabel, t, untilLabel } from '../../lib/i18n/index.svelte';
+  import { clockDuration, fmtMinuteOfDay, fmtTime, fmtDate, fmtDateTime, fmtNumber, fmtRelative, humanDuration, locale, sinceLabel, t, untilLabel } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
   import { evDay, eventsInRange, fieldSummaries, heatmap, measureSeries, periodSeries } from '../../lib/domain/stats';
   import { periodKey } from '../../lib/domain/time';
@@ -15,6 +15,9 @@
   import BarChart from '../components/BarChart.svelte';
   import Achievements from '../components/Achievements.svelte';
   import EventDialog from '../components/EventDialog.svelte';
+  import SpanBars from '../components/SpanBars.svelte';
+  import { durationOf } from '../../lib/domain/span';
+  import { startSpan, stopSpan } from '../../lib/spans';
 
   let { id }: { id: string } = $props();
 
@@ -29,8 +32,14 @@
     if (tracker?.goal_period) chartPeriod = tracker.goal_period;
   });
   const WINDOW: Record<ChartPeriod, number> = { day: 14, week: 12, month: 12, year: 10 };
-  const series = $derived(view ? periodSeries(view.events, chartPeriod, WINDOW[chartPeriod], clock.now, localOffset(), chartOffset) : []);
+  /** Span trackers chart hours per period; the others count events. */
+  const hours = (e: LifeEvent) => durationOf(e) / 3_600_000;
+  const series = $derived(
+    view ? periodSeries(view.events, chartPeriod, WINDOW[chartPeriod], clock.now, localOffset(), chartOffset, view.span ? hours : undefined) : [],
+  );
   const seriesTotal = $derived(series.reduce((n, d) => n + d.count, 0));
+  /** A goal of a span tracker is in minutes: « 7 h ». */
+  const goalAmount = (n: number) => (view?.span ? clockDuration(n * 60_000) : String(n));
 
   /** Ce que montre le graphique : le nombre d'événements, une mesure, ou toutes les mesures. */
   let chartShow = $state<'count' | 'all' | string>('count');
@@ -77,6 +86,8 @@
   let tab = $state<'journal' | 'stats' | 'achievements'>('journal');
   /** The entry dialog opens on « planned » (the hero's Plan button). */
   let planning = $state(false);
+  /** The entry dialog ends the running period now (span trackers with measures). */
+  let stopping = $state(false);
   const todoIds = $derived(new Set(view?.todo.map((e) => e.id) ?? []));
   let allAch = $state(false);
   /** Succès obtenus + les 3 prochains de chaque famille. */
@@ -105,6 +116,14 @@
 
   async function quickLog() {
     if (!tracker) return;
+    if (view?.span) {
+      if (view.running && view.fields.length) {
+        stopping = true;
+        editing = view.running;
+      } else if (view.running) await stopSpan(tracker, view.running);
+      else await startSpan(tracker);
+      return;
+    }
     if (view?.fields.length) {
       planning = false;
       editing = null;
@@ -140,11 +159,22 @@
     </header>
 
     <section class="hero">
-      {#if tracker.show_next}
+      {#if view.span}
+        {#if view.running}
+          {@const from = Date.parse(view.running.occurred_at)}
+          <div class="live"><span class="dot" aria-hidden="true"></span>{t('span.since', { time: fmtTime(from) })}</div>
+          <div class="big">{clockDuration(clock.now - from)}</div>
+        {:else if view.span.last}
+          <div class="big">{clockDuration(view.span.lastMs)}</div>
+          <div class="muted">{t('span.last', { when: fmtRelative(Date.parse(view.span.last.ended_at!), clock.now) })}{#if view.span.avgMs !== null && view.stats.count > 1}{' · '}{t('span.avg', { d: clockDuration(view.span.avgMs) })}{/if}</div>
+        {:else}
+          <div class="big">{t('span.never')}</div>
+        {/if}
+      {:else if tracker.show_next}
         {#if view.upcoming[0]}
           {@const at = Date.parse(view.upcoming[0].occurred_at)}
           <div class="big">{untilLabel(at, clock.now)}</div>
-          <div class="muted">📅 {fmtDateTime(at)}{#if view.upcoming[0].note} · {view.upcoming[0].note}{/if}</div>
+          <div class="muted">📅 {fmtDateTime(at)}{#if view.upcoming[0].note}{' · '}{view.upcoming[0].note}{/if}</div>
         {:else}
           <div class="big">{t('up.none')}</div>
           {#if view.stats.lastAt !== null}<div class="muted">{t('up.last', { when: fmtRelative(view.stats.lastAt, clock.now) })}</div>{/if}
@@ -157,7 +187,7 @@
         <div class="muted">{t('dash.week', { n: view.stats.thisWeek })}</div>
       {/if}
       <div class="hero-actions">
-        <button class="btn primary log" onclick={quickLog}>{t('dash.log')}</button>
+        <button class="btn primary log" onclick={quickLog}>{#if view.span}{view.running ? '⏹' : '▶'} {view.running ? t('span.stop') : t('span.start')}{:else}{t('dash.log')}{/if}</button>
         <button class="btn plan" onclick={plan}>📅 {t('up.plan')}</button>
       </div>
     </section>
@@ -180,7 +210,7 @@
           <li>
             <button class="ev" onclick={() => (editing = e)}>
               <span class="until">📅 {untilLabel(Date.parse(e.occurred_at), clock.now)} <span class="badge">{t('up.badge')}</span></span>
-              <span class="small">{fmtDateTime(e.occurred_at)}</span>
+              <span class="small">{fmtDateTime(e.occurred_at)}{#if e.ended_at}{' → '}{fmtTime(Date.parse(e.ended_at))} · {clockDuration(durationOf(e))}{/if}</span>
               {#if measureText(e)}<span class="small">{measureText(e)}</span>{/if}
               {#if e.note}<span class="small muted">{e.note}</span>{/if}
             </button>
@@ -192,14 +222,23 @@
 
     <section class="section">
       <h2>{t('detail.recent')}</h2>
-      {#if history.length === 0}
+      {#if view.running}
+        <ul class="list card running" style="padding:0 16px;margin-bottom:8px">
+          <li>
+            <button class="ev" onclick={() => (editing = view.running)}>
+              <span>{fmtDateTime(view.running.occurred_at)} → … <span class="badge">{t('span.runningShort')}</span></span>
+            </button>
+          </li>
+        </ul>
+      {/if}
+      {#if history.length === 0 && !view.running}
         <p class="muted">{t('detail.noEvents')}</p>
       {:else}
         <ul class="list card" style="padding:0 16px">
           {#each history.slice(0, shown) as e (e.id)}
             <li>
               <button class="ev" onclick={() => (editing = e)}>
-                <span>{fmtDateTime(e.occurred_at)}{#if todoIds.has(e.id)} <span class="badge todo">✍️ {t('todo.badge')}</span>{/if}</span>
+                <span>{fmtDateTime(e.occurred_at)}{#if e.ended_at}{' → '}{fmtTime(Date.parse(e.ended_at))} · <b>{clockDuration(durationOf(e))}</b>{/if}{#if todoIds.has(e.id)}{' '}<span class="badge todo">✍️ {t('todo.badge')}</span>{/if}</span>
                 {#if measureText(e)}<span class="small">{measureText(e)}</span>{/if}
                 {#if e.note}<span class="small muted">{e.note}</span>{/if}
               </button>
@@ -213,6 +252,24 @@
     </section>
     {:else if tab === 'stats'}
 
+    {#if view.span}
+      {#if view.span.recent.length}
+        <section class="section">
+          <h2>{t('span.recent', { n: view.span.recent.length })}</h2>
+          <div class="card"><SpanBars bars={view.span.recent} {color} onpick={(b) => (editing = b.event)} /></div>
+        </section>
+      {/if}
+      <section class="section">
+        <div class="stats-grid">
+          <div class="stat"><div class="label">{t('span.avgLen')}</div><div class="value">{view.span.avgMs !== null ? clockDuration(view.span.avgMs) : '–'}</div></div>
+          <div class="stat"><div class="label">{t('span.longest')}</div><div class="value">{view.span.longestMs ? clockDuration(view.span.longestMs) : '–'}</div></div>
+          <div class="stat"><div class="label">{t('span.avgStart')}</div><div class="value">{view.span.avgStart !== null ? fmtMinuteOfDay(view.span.avgStart) : '–'}</div></div>
+          <div class="stat"><div class="label">{t('span.avgEnd')}</div><div class="value">{view.span.avgEnd !== null ? fmtMinuteOfDay(view.span.avgEnd) : '–'}</div></div>
+          <div class="stat"><div class="label">{t('detail.total')}</div><div class="value">{view.stats.count}</div></div>
+          <div class="stat"><div class="label">{t('detail.streak')}</div><div class="value">{t('detail.days', { n: view.stats.currentStreak })}</div></div>
+        </div>
+      </section>
+    {:else}
     <section class="section">
       <div class="stats-grid">
         {#if tracker.display_mode === 'abstinence' && view.stats.longestGap}
@@ -229,12 +286,13 @@
         <div class="stat"><div class="label">{t('detail.bestStreak')}</div><div class="value">{t('detail.days', { n: view.stats.longestStreak })}</div></div>
       </div>
     </section>
+    {/if}
 
     {#if view.goal}
       <section class="section">
         <h2>{t('detail.goal')}</h2>
         <div class="card">
-          <strong>{t(view.goal.kind === 'max' ? 'detail.goal.max' : 'detail.goal.min', { n: view.goal.target, period: t(`period.${view.goal.period}`) })}</strong>
+          <strong>{t(view.goal.kind === 'max' ? 'detail.goal.max' : 'detail.goal.min', { n: goalAmount(view.goal.target), period: t(`period.${view.goal.period}`) })}</strong>
           <GoalBar goal={view.goal} />
           <p class="small muted" style="margin:8px 0 0">{t('detail.goal.streak', { n: view.goal.streak, best: view.goal.bestStreak })}</p>
         </div>
@@ -266,7 +324,7 @@
           <button class="icon-btn" disabled={!hasOlder} onclick={() => chartOffset++} aria-label={t('detail.chart.older')} title={t('detail.chart.older')}>‹</button>
           <div class="grow range">
             <div>{rangeLabel()}</div>
-            <div class="small muted">{t('detail.chart.total', { n: seriesTotal })}</div>
+            <div class="small muted">{view.span ? t('span.total', { d: clockDuration(seriesTotal * 3_600_000) }) : t('detail.chart.total', { n: seriesTotal })}</div>
             {#if chartOffset > 0}
               <button class="linkish small" onclick={() => (chartOffset = 0)}>{t('detail.chart.latest')}</button>
             {/if}
@@ -274,7 +332,13 @@
           <button class="icon-btn" disabled={chartOffset === 0} onclick={() => chartOffset--} aria-label={t('detail.chart.newer')} title={t('detail.chart.newer')}>›</button>
         </div>
         {#if chartShow === 'count' || !lineSeries.length}
-          <BarChart data={series} {color} target={view.goal?.period === chartPeriod ? view.goal.target : null} labelOf={periodLabel} />
+          <BarChart
+            data={series}
+            {color}
+            target={view.goal?.period === chartPeriod ? (view.span ? view.goal.target / 60 : view.goal.target) : null}
+            labelOf={periodLabel}
+            fmt={view.span ? (n) => fmtNumber(n, n < 10 ? 1 : 0) : String}
+          />
         {:else}
           <LineChart series={lineSeries} labelOf={periodLabel} fmt={(n) => fmtNumber(n, 1)} />
           <p class="small muted" style="margin:4px 0 0;text-align:center">{t('detail.chart.avgHint', { period: t(`period.${chartPeriod}`) })}</p>
@@ -326,7 +390,15 @@
   </div>
 
   {#if editing !== undefined}
-    <EventDialog {tracker} fields={view.fields} event={editing} mode={planning ? 'plan' : 'done'} onclose={() => ((editing = undefined), (planning = false))} />
+    <EventDialog
+      {tracker}
+      fields={view.fields}
+      event={editing}
+      mode={planning ? 'plan' : stopping ? 'stop' : 'done'}
+      typical={view.span?.avgMs ?? undefined}
+      usualStart={view.span?.avgStart ?? null}
+      onclose={() => ((editing = undefined), (planning = false), (stopping = false))}
+    />
   {/if}
 {/if}
 
@@ -343,6 +415,9 @@
   .chart-nav .range { text-align: center; font-weight: 600; }
   .chart-nav .linkish { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
   .chart-nav .icon-btn:disabled { opacity: 0.3; cursor: default; }
+  .live { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: color-mix(in srgb, var(--c) 70%, var(--text)); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 25%, transparent); }
+  .running { border: 1px dashed color-mix(in srgb, var(--c) 55%, transparent); }
   .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
   .plan { background: var(--surface); }
   .tabs { margin-top: 16px; }

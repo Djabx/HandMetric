@@ -259,4 +259,21 @@ describe('Store', () => {
     a.saveTracker({ ...input, id: t.id, show_next: null });
     expect(a.getTracker(t.id)!.show_next).toBeNull();
   });
+
+  it('enregistre la fin des périodes et refuse une fin avant le début', async () => {
+    const a = await newStore();
+    const t = a.saveTracker({ name: 'Sommeil', icon: null, color: null, polarity: 'neutral', display_mode: 'frequency', goal_kind: null, goal_count: null, goal_period: null, span: 1 });
+    expect(a.getTracker(t.id)!.span).toBe(1);
+    const running = a.saveEvent({ tracker_id: t.id, occurred_at: '2026-11-27T22:10:00.000Z', ended_at: null });
+    expect(running.ended_at).toBeNull();
+    const done = a.saveEvent({ id: running.id, tracker_id: t.id, occurred_at: running.occurred_at, ended_at: '2026-11-28T05:35:00.000Z' });
+    expect(done.ended_at).toBe('2026-11-28T05:35:00.000Z');
+    // Editing the note keeps the end.
+    expect(a.saveEvent({ id: running.id, tracker_id: t.id, occurred_at: running.occurred_at, note: 'bien dormi' }).ended_at).toBe(done.ended_at);
+    expect(() => a.saveEvent({ tracker_id: t.id, occurred_at: '2026-11-28T05:00:00.000Z', ended_at: '2026-11-28T04:00:00.000Z' })).toThrow();
+    const b = await newStore();
+    b.merge(a.snapshot());
+    expect(b.listEvents(t.id)[0].ended_at).toBe(done.ended_at);
+    expect(b.getTracker(t.id)!.span).toBe(1);
+  });
 });
