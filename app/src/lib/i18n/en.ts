@@ -213,6 +213,12 @@ export const en: Record<Key, string> = {
   'dt.yesterday': 'Yesterday',
   'dt.prevMonth': 'Previous month',
   'dt.nextMonth': 'Next month',
+  'dt.pickMonth': 'Choose month and year',
+  'dt.pickYear': 'Choose year',
+  'dt.prevYear': 'Previous year',
+  'dt.nextYear': 'Next year',
+  'dt.prevYears': 'Earlier years',
+  'dt.nextYears': 'Later years',
   'dt.done': 'OK',
 
   'settings.title': 'Settings',

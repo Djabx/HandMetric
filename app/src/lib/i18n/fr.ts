@@ -211,6 +211,12 @@ export const fr = {
   'dt.yesterday': 'Hier',
   'dt.prevMonth': 'Mois précédent',
   'dt.nextMonth': 'Mois suivant',
+  'dt.pickMonth': 'Choisir le mois et l’année',
+  'dt.pickYear': 'Choisir l’année',
+  'dt.prevYear': 'Année précédente',
+  'dt.nextYear': 'Année suivante',
+  'dt.prevYears': 'Années précédentes',
+  'dt.nextYears': 'Années suivantes',
   'dt.done': 'OK',
 
   'settings.title': 'Réglages',
