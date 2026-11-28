@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app, clock, viewOf } from '../../lib/state.svelte';
-  import { fmtDate, fmtDateTime, fmtNumber, humanDuration, locale, sinceLabel, t } from '../../lib/i18n/index.svelte';
+  import { fmtDate, fmtDateTime, fmtNumber, humanDuration, locale, sinceLabel, t, untilLabel } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
   import { evDay, eventsInRange, fieldSummaries, heatmap, measureSeries, periodSeries } from '../../lib/domain/stats';
   import { periodKey } from '../../lib/domain/time';
@@ -138,6 +138,24 @@
       {/if}
       <button class="btn primary log" onclick={quickLog}>{t('dash.log')}</button>
     </section>
+
+    {#if view.upcoming.length}
+    <section class="section">
+      <h2>{t('up.title')}</h2>
+      <ul class="list card upcoming" style="padding:0 16px">
+        {#each view.upcoming as e (e.id)}
+          <li>
+            <button class="ev" onclick={() => (editing = e)}>
+              <span class="until">📅 {untilLabel(Date.parse(e.occurred_at), clock.now)}</span>
+              <span class="small">{fmtDateTime(e.occurred_at)}</span>
+              {#if measureText(e)}<span class="small">{measureText(e)}</span>{/if}
+              {#if e.note}<span class="small muted">{e.note}</span>{/if}
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+    {/if}
 
     <section class="section">
       <div class="stats-grid">
@@ -292,5 +310,7 @@
   .chart-nav .linkish { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
   .chart-nav .icon-btn:disabled { opacity: 0.3; cursor: default; }
   .log { justify-self: start; margin-top: 10px; min-width: 120px; font-family: var(--font-display); font-size: 1.15rem; background: var(--c); border-color: var(--c); color: #fff; color: lch(from var(--c) calc((68 - l) * 100) 0 0); }
+  .upcoming { border: 1px dashed color-mix(in srgb, var(--c) 55%, transparent); }
+  .upcoming .until { font-weight: 700; }
   .ev { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 0; border: 0; background: none; cursor: pointer; }
 </style>

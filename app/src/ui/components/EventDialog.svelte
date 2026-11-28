@@ -1,6 +1,6 @@
 <script lang="ts">
   import { db } from '../../lib/db/client';
-  import { t } from '../../lib/i18n/index.svelte';
+  import { t, untilLabel } from '../../lib/i18n/index.svelte';
   import { unitLabel } from '../../lib/templates';
   import type { LifeEvent, Tracker, TrackerField } from '../../lib/types';
   import { toast } from '../../lib/state.svelte';
@@ -27,6 +27,8 @@
     Object.fromEntries(fields.map((f) => [f.id, event?.measures?.[f.id] !== undefined ? String(event.measures[f.id]) : ''])),
   );
   let busy = $state(false);
+  /** Picked a date in the future: the event is planned and only counts once its time comes. */
+  const planned = $derived(when > Date.now() + 60_000);
 
   $effect(() => {
     dialog.showModal();
@@ -54,7 +56,10 @@
         measures,
         note,
       });
-      if (!event) toast(t('dash.logged', { name: tracker.name }), { icon: tracker.icon ?? undefined });
+      if (!event)
+        toast(planned ? t('up.planned', { name: tracker.name, when: untilLabel(when, Date.now()) }) : t('dash.logged', { name: tracker.name }), {
+          icon: planned ? '📅' : (tracker.icon ?? undefined),
+        });
       close();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err));
@@ -84,6 +89,7 @@
     <div class="field">
       <span>{t('event.when')}</span>
       <DateTimeInput bind:value={when} label={t('event.when')} />
+      {#if planned}<p class="small muted planned">📅 {t('up.hint', { when: untilLabel(when, Date.now()) })}</p>{/if}
     </div>
     {#each fields as f (f.id)}
       <label class="field">
@@ -105,3 +111,7 @@
     </div>
   </form>
 </dialog>
+
+<style>
+  .planned { margin: 0; }
+</style>

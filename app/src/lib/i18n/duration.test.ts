@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { humanDuration, i18n } from './index.svelte';
+import { humanDuration, i18n, untilLabel } from './index.svelte';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -43,5 +43,30 @@ describe('humanDuration (en)', () => {
     } finally {
       i18n.lang = 'fr';
     }
+  });
+});
+
+describe('untilLabel', () => {
+  i18n.lang = 'fr';
+  const now = new Date(2026, 10, 28, 10, 0).getTime();
+  const at = (mo: number, d: number, h = 20, mi = 0) => new Date(2026, mo, d, h, mi).getTime();
+
+  it('counts hours and minutes on the same day', () => {
+    expect(untilLabel(now + 20_000, now)).toBe('dans un instant');
+    expect(untilLabel(at(10, 28, 10, 25), now)).toBe('dans 25 minutes');
+    expect(untilLabel(at(10, 28, 20, 30), now)).toBe('dans 10 heures et 30 minutes');
+  });
+
+  it('counts calendar days within a month, whatever the hour', () => {
+    expect(untilLabel(at(10, 29, 8), now)).toBe('demain');
+    expect(untilLabel(at(11, 3, 9, 15), now)).toBe('dans 5 jours');
+    expect(untilLabel(at(11, 27, 9), now)).toBe('dans 29 jours');
+  });
+
+  it('switches to months, and keeps only the main unit when short', () => {
+    expect(untilLabel(at(11, 31, 20, 30), now)).toBe('dans 1 mois et 3 jours');
+    expect(untilLabel(at(11, 31, 20, 30), now, 'short')).toBe('dans 1 mois');
+    expect(untilLabel(at(11, 3, 9, 15), now, 'bare')).toBe('5 jours');
+    expect(untilLabel(new Date(2028, 0, 2).getTime(), now, 'short')).toBe('dans 1 an');
   });
 });

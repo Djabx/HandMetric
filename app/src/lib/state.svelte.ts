@@ -31,7 +31,10 @@ setInterval(() => (clock.now = Date.now()), 15_000);
 export interface TrackerView {
   tracker: Tracker;
   fields: TrackerField[];
+  /** Past events only: everything that already happened (stats, charts, history). */
   events: LifeEvent[];
+  /** Planned events, still in the future, soonest first. They join `events` once their time comes. */
+  upcoming: LifeEvent[];
   stats: TrackerStats;
   goal: GoalStatus | null;
   achievements: Achievement[];
@@ -39,12 +42,18 @@ export interface TrackerView {
 
 /** Calcule la vue d'un compteur à un instant donné. */
 export function viewOf(tracker: Tracker, now: number): TrackerView {
-  const events = app.events.filter((e) => e.tracker_id === tracker.id);
+  const events: LifeEvent[] = [];
+  const upcoming: LifeEvent[] = [];
+  for (const e of app.events) {
+    if (e.tracker_id !== tracker.id) continue;
+    (Date.parse(e.occurred_at) > now ? upcoming : events).push(e);
+  }
+  upcoming.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
   const fields = app.fields.filter((f) => f.tracker_id === tracker.id);
   const tz = localOffset();
   const stats = computeStats(tracker, events, now, tz);
   const goal = goalStatus(tracker, events, now, tz);
-  return { tracker, fields, events, stats, goal, achievements: achievements(tracker, stats, goal) };
+  return { tracker, fields, events, upcoming, stats, goal, achievements: achievements(tracker, stats, goal) };
 }
 
 // ---------- toasts ----------
