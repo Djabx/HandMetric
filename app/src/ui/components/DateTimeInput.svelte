@@ -15,8 +15,20 @@
   const sel = $derived(new Date(value));
   /** Mois affiché dans le calendrier (1er du mois). */
   let shown = $state(new Date());
+  /**
+   * Vue du calendrier : les jours d'un mois, les 12 mois d'une année, ou une page
+   * d'années. Toucher le titre remonte d'un niveau, pour aller loin dans le passé
+   * (une date de naissance) sans défiler mois par mois.
+   */
+  let view = $state<'days' | 'months' | 'years'>('days');
+  /** Page d'années affichée : 0 = les YEARS_PER_PAGE années jusqu'à l'année en cours, 1 = les précédentes, -1 = les suivantes. */
+  let yearPage = $state(0);
+  const YEARS_PER_PAGE = 20;
   $effect(() => {
-    if (!open) shown = new Date(sel.getFullYear(), sel.getMonth(), 1);
+    if (!open) {
+      shown = new Date(sel.getFullYear(), sel.getMonth(), 1);
+      view = 'days';
+    }
   });
 
   const summary = $derived(
@@ -34,6 +46,16 @@
     const n = new Date();
     return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
   });
+  const thisYear = $derived(new Date(today).getFullYear());
+  const thisMonth = $derived(new Date(today).getMonth());
+
+  const monthNames = $derived(
+    Array.from({ length: 12 }, (_, m) => new Intl.DateTimeFormat(locale(), { month: 'short' }).format(new Date(2026, m, 1))),
+  );
+  /** Années de la page courante, de la plus ancienne à la plus récente. */
+  const years = $derived(
+    Array.from({ length: YEARS_PER_PAGE }, (_, i) => thisYear - yearPage * YEARS_PER_PAGE - (YEARS_PER_PAGE - 1) + i),
+  );
 
   /** 6 semaines à partir du lundi qui précède (ou est) le 1er du mois. */
   const days = $derived.by(() => {
@@ -58,6 +80,21 @@
   function move(delta: number) {
     shown = new Date(shown.getFullYear(), shown.getMonth() + delta, 1);
   }
+  function moveYear(delta: number) {
+    shown = new Date(shown.getFullYear() + delta, shown.getMonth(), 1);
+  }
+  function showYears() {
+    yearPage = Math.floor((thisYear - shown.getFullYear()) / YEARS_PER_PAGE);
+    view = 'years';
+  }
+  function pickYear(y: number) {
+    shown = new Date(y, shown.getMonth(), 1);
+    view = 'months';
+  }
+  function pickMonth(m: number) {
+    shown = new Date(shown.getFullYear(), m, 1);
+    view = 'days';
+  }
   function quick(ms: number) {
     value = ms;
     shown = new Date(new Date(ms).getFullYear(), new Date(ms).getMonth(), 1);
@@ -77,37 +114,72 @@
 
   {#if open}
     <div class="panel">
-      <div class="month">
-        <button type="button" class="nav" onclick={() => move(-1)} aria-label={t('dt.prevMonth')}>‹</button>
-        <span>{monthTitle}</span>
-        <button type="button" class="nav" onclick={() => move(1)} aria-label={t('dt.nextMonth')}>›</button>
-      </div>
-      <div class="cal" role="group" aria-label={monthTitle}>
-        {#each weekdays as w, i (i)}<span class="wd" aria-hidden="true">{w}</span>{/each}
-        {#each days as d (d.getTime())}
-          <button
-            type="button"
-            class="day"
-            class:other={d.getMonth() !== shown.getMonth()}
-            class:today={d.getTime() === today}
-            aria-pressed={sameDay(d, sel)}
-            aria-label={dayLabel(d)}
-            onclick={() => pickDay(d)}>{d.getDate()}</button>
-        {/each}
-      </div>
+      {#if view === 'days'}
+        <div class="month">
+          <button type="button" class="nav" onclick={() => move(-1)} aria-label={t('dt.prevMonth')}>‹</button>
+          <button type="button" class="title" onclick={() => (view = 'months')} aria-label={t('dt.pickMonth')}>
+            {monthTitle}<span class="caret" aria-hidden="true">▾</span>
+          </button>
+          <button type="button" class="nav" onclick={() => move(1)} aria-label={t('dt.nextMonth')}>›</button>
+        </div>
+        <div class="cal" role="group" aria-label={monthTitle}>
+          {#each weekdays as w, i (i)}<span class="wd" aria-hidden="true">{w}</span>{/each}
+          {#each days as d (d.getTime())}
+            <button
+              type="button"
+              class="day"
+              class:other={d.getMonth() !== shown.getMonth()}
+              class:today={d.getTime() === today}
+              aria-pressed={sameDay(d, sel)}
+              aria-label={dayLabel(d)}
+              onclick={() => pickDay(d)}>{d.getDate()}</button>
+          {/each}
+        </div>
+      {:else if view === 'months'}
+        <div class="month">
+          <button type="button" class="nav" onclick={() => moveYear(-1)} aria-label={t('dt.prevYear')}>‹</button>
+          <button type="button" class="title" onclick={showYears} aria-label={t('dt.pickYear')}>
+            {shown.getFullYear()}<span class="caret" aria-hidden="true">▾</span>
+          </button>
+          <button type="button" class="nav" onclick={() => moveYear(1)} aria-label={t('dt.nextYear')}
+            >›</button>
+        </div>
+        <div class="grid" role="group" aria-label={String(shown.getFullYear())}>
+          {#each monthNames as name, m (m)}
+            <button
+              type="button"
+              class:today={shown.getFullYear() === thisYear && m === thisMonth}
+              aria-pressed={sel.getFullYear() === shown.getFullYear() && sel.getMonth() === m}
+              onclick={() => pickMonth(m)}>{name}</button>
+          {/each}
+        </div>
+      {:else}
+        <div class="month">
+          <button type="button" class="nav" onclick={() => yearPage++} aria-label={t('dt.prevYears')}>‹</button>
+          <span>{years[0]} – {years[years.length - 1]}</span>
+          <button type="button" class="nav" onclick={() => yearPage--} aria-label={t('dt.nextYears')}>›</button>
+        </div>
+        <div class="grid" role="group" aria-label={t('dt.pickYear')}>
+          {#each years as y (y)}
+            <button type="button" class:today={y === thisYear} aria-pressed={sel.getFullYear() === y} onclick={() => pickYear(y)}>{y}</button>
+          {/each}
+        </div>
+      {/if}
 
-      <p class="lbl">{t('dt.hour')}</p>
-      <div class="hours" role="group" aria-label={t('dt.hour')}>
-        {#each { length: 24 } as _, h (h)}
-          <button type="button" aria-pressed={sel.getHours() === h} onclick={() => pickHour(h)}>{pad(h)}</button>
-        {/each}
-      </div>
-      <p class="lbl">{t('dt.minute')}</p>
-      <div class="minutes" role="group" aria-label={t('dt.minute')}>
-        {#each { length: 12 } as _, i (i)}
-          <button type="button" aria-pressed={sel.getMinutes() === i * 5} onclick={() => pickMinute(i * 5)}>:{pad(i * 5)}</button>
-        {/each}
-      </div>
+      {#if view === 'days'}
+        <p class="lbl">{t('dt.hour')}</p>
+        <div class="hours" role="group" aria-label={t('dt.hour')}>
+          {#each { length: 24 } as _, h (h)}
+            <button type="button" aria-pressed={sel.getHours() === h} onclick={() => pickHour(h)}>{pad(h)}</button>
+          {/each}
+        </div>
+        <p class="lbl">{t('dt.minute')}</p>
+        <div class="minutes" role="group" aria-label={t('dt.minute')}>
+          {#each { length: 12 } as _, i (i)}
+            <button type="button" aria-pressed={sel.getMinutes() === i * 5} onclick={() => pickMinute(i * 5)}>:{pad(i * 5)}</button>
+          {/each}
+        </div>
+      {/if}
       <div class="done"><button type="button" class="btn small primary" onclick={() => (open = false)}>{t('dt.done')}</button></div>
     </div>
   {/if}
@@ -134,6 +206,19 @@
     background: var(--surface-2); color: inherit;
   }
   .nav:disabled { opacity: 0.35; cursor: default; }
+  .title {
+    border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; background: none; color: inherit;
+    font: inherit; text-transform: inherit;
+  }
+  .title:hover { background: var(--surface-2); }
+  .caret { margin-left: 6px; font-size: 0.8em; opacity: 0.7; }
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .grid button {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 0; cursor: pointer; text-transform: capitalize;
+    background: var(--surface); color: inherit; font: inherit; font-variant-numeric: tabular-nums;
+  }
+  .grid button.today { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .grid button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
   .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; text-align: center; }
   .wd { color: var(--muted); font-size: 0.72rem; font-weight: 700; padding: 4px 0; text-transform: uppercase; }
   .day {
