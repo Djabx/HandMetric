@@ -36,6 +36,9 @@
   const last = $derived(measured.at(-1) ?? null);
   /** Next planned event, shown as a countdown under the tile's main figure. */
   const next = $derived(view.upcoming[0] ?? null);
+  /** The tile looks ahead: a countdown to the next planned event. */
+  const ahead = $derived(!!tr.show_next);
+  const lastAt = $derived(view.stats.lastAt);
   /** « 12,5 / 8 » : une valeur par mesure ; l'unité seulement si elle est commune. */
   const lastValue = $derived.by(() => {
     if (!last) return '';
@@ -107,7 +110,20 @@
       <span class="icon" aria-hidden="true">{tr.icon ?? '•'}</span>
       <span class="name">{tr.name}</span>
     </span>
-    {#if size === 'small'}
+    {#if ahead}
+      {#if next}
+        {@const at = Date.parse(next.occurred_at)}
+        {#if size === 'small'}
+          <span class="sub"><b>{untilLabel(at, now, 'bare')}</b></span>
+        {:else}
+          <span class="big">{untilLabel(at, now, size === 'wide' ? 'full' : 'short')}</span>
+          <span class="sub">📅 {fmtShortDate(at, now)}{#if next.note} · {next.note}{/if}</span>
+        {/if}
+      {:else}
+        <span class={size === 'small' ? 'sub' : 'big none'}>{t('up.none')}</span>
+        {#if lastAt !== null && size !== 'small'}<span class="sub">{t('up.last', { when: fmtRelative(lastAt, now) })}</span>{/if}
+      {/if}
+    {:else if size === 'small'}
       <span class="sub">
         {#if abstinence}{humanDuration(s.currentGapFrom, now)}{:else if last}{lastValue}{:else}{t('dash.today', { n: s.today })}{/if}
       </span>
@@ -135,7 +151,7 @@
     {#if view.goal && !tally && size !== 'small'}
       <GoalBar goal={view.goal} compact />
     {/if}
-    {#if next && !todo}
+    {#if next && !todo && !ahead}
       {@const at = Date.parse(next.occurred_at)}
       <span class="next" title={next.note ?? undefined}>
         <span aria-hidden="true">📅</span>
@@ -200,6 +216,7 @@
   .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .big { font-family: var(--font-display); font-size: 1.45rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
   .wide .big { font-size: 2rem; }
+  .big.none { font-size: 1.15rem; color: var(--muted); }
   .sub { color: var(--muted); font-size: 0.8rem; }
   .next {
     display: flex; align-items: center; gap: 6px; min-width: 0; justify-self: start; max-width: 100%;

@@ -220,6 +220,7 @@ fn json_cols(table: &str, present: &[String]) -> String {
             "archived_at",
             "achievements",
             "tile",
+            "show_next",
             "created_at",
             "updated_at",
             "deleted_at",

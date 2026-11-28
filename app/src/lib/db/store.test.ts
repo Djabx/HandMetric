@@ -246,4 +246,17 @@ describe('Store', () => {
     b.merge(snap);
     expect(b.getTracker(t.id)!.tile).toBeNull();
   });
+
+  it('enregistre et synchronise le compte à rebours du prochain prévu', async () => {
+    const a = await newStore();
+    const input = { name: 'Concert', icon: null, color: null, polarity: 'good' as const, display_mode: 'frequency' as const, goal_kind: null, goal_count: null, goal_period: null };
+    const t = a.saveTracker({ ...input, show_next: 1 });
+    const b = await newStore();
+    b.merge(a.snapshot());
+    expect(b.getTracker(t.id)!.show_next).toBe(1);
+    a.saveTracker({ ...input, id: t.id });
+    expect(a.getTracker(t.id)!.show_next).toBe(1);
+    a.saveTracker({ ...input, id: t.id, show_next: null });
+    expect(a.getTracker(t.id)!.show_next).toBeNull();
+  });
 });

@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS tracker (
   achievements INTEGER,
   -- Taille de la tuile : NULL = automatique, sinon small, normal, wide ou tall.
   tile         TEXT,
+  -- Mettre en avant le prochain événement prévu (compte à rebours) : NULL ou 0 = non, 1 = oui.
+  show_next    INTEGER,
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
   deleted_at   TEXT,

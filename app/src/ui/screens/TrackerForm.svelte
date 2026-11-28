@@ -23,6 +23,8 @@
   let color = $state(existing?.color ?? tpl?.color ?? PALETTE[5]);
   let polarity = $state<Polarity>(existing?.polarity ?? tpl?.polarity ?? 'good');
   let mode = $state<DisplayMode>(existing?.display_mode ?? tpl?.display_mode ?? 'frequency');
+  /** Countdown to the next planned event instead of the past (concerts, appointments). */
+  let showNext = $state<boolean>(!!(existing?.show_next ?? tpl?.show_next));
   let goalKind = $state<GoalKind | ''>(existing?.goal_kind ?? tpl?.goal?.kind ?? '');
   let goalCount = $state<number>(existing?.goal_count ?? tpl?.goal?.count ?? 1);
   let goalPeriod = $state<Period>(existing?.goal_period ?? tpl?.goal?.period ?? 'week');
@@ -67,6 +69,7 @@
           goal_count: goalKind ? goalCount : null,
           achievements: trophies,
           tile,
+          show_next: showNext ? 1 : null,
           goal_period: goalKind ? goalPeriod : null,
         },
         $state.snapshot(fields).map((f) => ({ id: f.id, name: f.name, unit: f.unit || null })),
@@ -148,9 +151,11 @@
         <span>{t('form.mode')}</span>
         <div class="segmented">
           {#each ['abstinence', 'frequency'] as const as m (m)}
-            <button type="button" aria-pressed={mode === m} onclick={() => (mode = m)}>{t(`form.mode.${m}`)}</button>
+            <button type="button" aria-pressed={!showNext && mode === m} onclick={() => ((mode = m), (showNext = false))}>{t(`form.mode.${m}`)}</button>
           {/each}
+          <button type="button" aria-pressed={showNext} onclick={() => (showNext = true)}>📅 {t('form.mode.next')}</button>
         </div>
+        {#if showNext}<span class="small muted">{t('form.mode.nextHelp')}</span>{/if}
       </div>
 
       <div class="field">

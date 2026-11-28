@@ -135,6 +135,7 @@ export class Store {
       archived_at: existing?.archived_at ?? null,
       achievements: input.achievements === undefined ? (existing?.achievements ?? null) : input.achievements,
       tile: input.tile === undefined ? (existing?.tile ?? null) : input.tile,
+      show_next: input.show_next === undefined ? (existing?.show_next ?? null) : input.show_next ? 1 : null,
       created_at: existing?.created_at ?? nowIso(),
       updated_at: stamp,
       deleted_at: null,
@@ -592,6 +593,7 @@ function sanitize(table: SyncTable, raw: Row): Row | null {
   if (table === 'tracker' && row.sort_order === null) row.sort_order = 0;
   if (table === 'tracker' && row.achievements !== null && row.achievements !== 0 && row.achievements !== 1) row.achievements = null;
   if (table === 'tracker' && row.tile !== null && !(TILE_SIZES as readonly unknown[]).includes(row.tile)) row.tile = null;
+  if (table === 'tracker' && row.show_next !== null && row.show_next !== 0 && row.show_next !== 1) row.show_next = null;
   if (table === 'tracker_field' && row.sort_order === null) row.sort_order = 0;
   if (table === 'event' && row.measures !== null) {
     try {

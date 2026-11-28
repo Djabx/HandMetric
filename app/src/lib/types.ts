@@ -30,6 +30,8 @@ export interface Tracker extends SyncMeta {
   achievements?: number | null;
   /** Taille de la tuile : null = automatique (selon le type). */
   tile?: TileSize | null;
+  /** Show the next planned event big on the tile (a countdown), rather than the past. */
+  show_next?: number | null;
 }
 
 export interface TrackerField extends SyncMeta {
@@ -74,7 +76,7 @@ export interface MergeSummary {
 
 export type TrackerInput = Pick<
   Tracker,
-  'name' | 'icon' | 'color' | 'polarity' | 'display_mode' | 'goal_kind' | 'goal_count' | 'goal_period' | 'achievements' | 'tile'
+  'name' | 'icon' | 'color' | 'polarity' | 'display_mode' | 'goal_kind' | 'goal_count' | 'goal_period' | 'achievements' | 'tile' | 'show_next'
 > & { id?: string };
 
 export type FieldInput = { id?: string; name: string; unit: string | null };

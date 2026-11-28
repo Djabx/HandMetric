@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app, clock, viewOf } from '../../lib/state.svelte';
-  import { fmtDate, fmtDateTime, fmtNumber, humanDuration, locale, sinceLabel, t, untilLabel } from '../../lib/i18n/index.svelte';
+  import { fmtDate, fmtDateTime, fmtNumber, fmtRelative, humanDuration, locale, sinceLabel, t, untilLabel } from '../../lib/i18n/index.svelte';
   import { back, go } from '../../lib/router.svelte';
   import { evDay, eventsInRange, fieldSummaries, heatmap, measureSeries, periodSeries } from '../../lib/domain/stats';
   import { periodKey } from '../../lib/domain/time';
@@ -140,7 +140,16 @@
     </header>
 
     <section class="hero">
-      {#if tracker.display_mode === 'abstinence'}
+      {#if tracker.show_next}
+        {#if view.upcoming[0]}
+          {@const at = Date.parse(view.upcoming[0].occurred_at)}
+          <div class="big">{untilLabel(at, clock.now)}</div>
+          <div class="muted">📅 {fmtDateTime(at)}{#if view.upcoming[0].note} · {view.upcoming[0].note}{/if}</div>
+        {:else}
+          <div class="big">{t('up.none')}</div>
+          {#if view.stats.lastAt !== null}<div class="muted">{t('up.last', { when: fmtRelative(view.stats.lastAt, clock.now) })}</div>{/if}
+        {/if}
+      {:else if tracker.display_mode === 'abstinence'}
         <div class="big">{humanDuration(view.stats.currentGapFrom, clock.now)}</div>
         <div class="muted">{sinceLabel(view.stats.currentGapFrom, clock.now, view.stats.count === 0)}</div>
       {:else}
