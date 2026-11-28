@@ -35,7 +35,13 @@ export const TEMPLATES: Template[] = [
     id: 'bp', name: 'tpl.bp', icon: '🩺', color: '#6e56cf', polarity: 'neutral', display_mode: 'frequency',
     fields: [{ name: 'tpl.systolic', unit: 'mm[Hg]' }, { name: 'tpl.diastolic', unit: 'mm[Hg]' }],
   },
-  { id: 'sleep', name: 'tpl.sleep', icon: '😴', color: '#12a594', polarity: 'neutral', display_mode: 'frequency', fields: [{ name: 'tpl.duration', unit: 'h' }] },
+  // Periods, with a start and an end.
+  { id: 'sleep', name: 'tpl.sleep', icon: '😴', color: '#6e56cf', polarity: 'good', display_mode: 'frequency', span: true, goal: { kind: 'min', count: 7 * 60, period: 'day' } },
+  { id: 'fasting', name: 'tpl.fasting', icon: '⏳', color: '#f76b15', polarity: 'good', display_mode: 'frequency', span: true },
+  { id: 'work', name: 'tpl.work', icon: '💼', color: '#0090ff', polarity: 'neutral', display_mode: 'frequency', span: true, goal: { kind: 'max', count: 40 * 60, period: 'week' } },
+  // Looking ahead: a countdown to the next one.
+  { id: 'concert', name: 'tpl.concert', icon: '🎸', color: '#d6409f', polarity: 'good', display_mode: 'frequency', show_next: true },
+  { id: 'doctor', name: 'tpl.doctor', icon: '🧑‍⚕️', color: '#12a594', polarity: 'neutral', display_mode: 'frequency', show_next: true },
   { id: 'weight', name: 'tpl.weight', icon: '⚖️', color: '#8d8d8d', polarity: 'neutral', display_mode: 'frequency', fields: [{ name: 'tpl.weight', unit: 'kg' }] },
   { id: 'meditation', name: 'tpl.meditation', icon: '🧘', color: '#6e56cf', polarity: 'good', display_mode: 'frequency', goal: { kind: 'min', count: 1, period: 'day' }, fields: [{ name: 'tpl.duration', unit: 'min' }] },
   { id: 'coffee', name: 'tpl.coffee', icon: '☕', color: '#f76b15', polarity: 'neutral', display_mode: 'frequency', goal: { kind: 'max', count: 3, period: 'day' } },
