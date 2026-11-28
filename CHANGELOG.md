@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/Djabx/LifeLog/compare/v0.1.0...v0.2.0) (2026-11-28)
+
+
+### Features
+
+* **app:** jump by month and year in the date picker ([34074c0](https://github.com/Djabx/LifeLog/commit/34074c0430fe7d1749b5e697485f36ee5e4c3a4d))
+* **app:** plan events in the future with a countdown ([5fcc21b](https://github.com/Djabx/LifeLog/commit/5fcc21b01480ebab852bcaa1e38eb1bb9bde9688))
+
 ## 0.1.0 (2026-11-27)
 
 
