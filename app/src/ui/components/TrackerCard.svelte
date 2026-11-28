@@ -8,7 +8,20 @@
   import GoalBar from './GoalBar.svelte';
   import Tally from './Tally.svelte';
 
-  let { view, now, onlog, lifted = false }: { view: TrackerView; now: number; onlog: (v: TrackerView) => void; lifted?: boolean } = $props();
+  import type { LifeEvent } from '../../lib/types';
+
+  let {
+    view,
+    now,
+    onlog,
+    lifted = false,
+  }: {
+    view: TrackerView;
+    now: number;
+    /** Opens the entry dialog: a new event (done or planned), or one to complete. */
+    onlog: (v: TrackerView, mode?: 'done' | 'plan', event?: LifeEvent) => void;
+    lifted?: boolean;
+  } = $props();
   const tr = $derived(view.tracker);
   const s = $derived(view.stats);
   const size = $derived(tileSize(tr, view.fields.length));
@@ -51,8 +64,30 @@
     tally ? t('detail.goal.progress', { current: tally.current, target: tally.target, when: t(`period.this.${tally.period}`) }) : '',
   );
 
-  async function log(e: MouseEvent) {
+  /** Planned events whose time came, still missing their measures. */
+  const todo = $derived(view.todo[0] ?? null);
+
+  // ---------- the « ▾ » menu next to +1 ----------
+  let menu = $state<HTMLDialogElement>();
+  let menuAt = $state({ left: 0, top: 0 });
+  function openMenu(e: MouseEvent) {
     e.stopPropagation();
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const width = 240;
+    const left = Math.max(12, Math.min(r.right - width, innerWidth - width - 12));
+    // Below the button, or above it when there is no room left under it.
+    const below = r.bottom + 8;
+    menuAt = { left, top: below + 210 > innerHeight ? Math.max(12, r.top - 8 - 210) : below };
+    menu?.showModal();
+  }
+  function pick(mode: 'now' | 'done' | 'plan') {
+    menu?.close();
+    if (mode === 'now') void log();
+    else onlog(view, mode);
+  }
+
+  async function log(e?: MouseEvent) {
+    e?.stopPropagation();
     if (view.fields.length) {
       onlog(view);
       return;
@@ -66,7 +101,7 @@
   }
 </script>
 
-<article class="tracker {size}" class:lifted data-id={tr.id} style:--c={tr.color ?? 'var(--accent)'}>
+<article class="tracker {size}" class:has-todo={!!todo} class:lifted data-id={tr.id} style:--c={tr.color ?? 'var(--accent)'}>
   <button class="body" onclick={() => go(`t/${tr.id}`)} aria-label={tr.name}>
     <span class="head">
       <span class="icon" aria-hidden="true">{tr.icon ?? '•'}</span>
@@ -100,7 +135,7 @@
     {#if view.goal && !tally && size !== 'small'}
       <GoalBar goal={view.goal} compact />
     {/if}
-    {#if next}
+    {#if next && !todo}
       {@const at = Date.parse(next.occurred_at)}
       <span class="next" title={next.note ?? undefined}>
         <span aria-hidden="true">📅</span>
@@ -108,13 +143,30 @@
       </span>
     {/if}
   </button>
-  <button class="log" onclick={log} aria-label="{t('dash.log')} {tr.name}">{t('dash.log')}</button>
+  {#if todo}
+    <button class="todo" onclick={() => onlog(view, 'done', todo)} aria-label="{t('todo.chip')} · {tr.name}">
+      <span aria-hidden="true">✍️</span>
+      <span class="until">{t('todo.chip')}</span>{#if size !== 'small'}<span class="when"> · {fmtRelative(Date.parse(todo.occurred_at), now)}</span>{/if}
+    </button>
+  {/if}
+  <span class="split">
+    <button class="log" onclick={log} aria-label="{t('dash.log')} {tr.name}">{t('dash.log')}</button>
+    <button class="log more" onclick={openMenu} aria-label={t('menu.more', { name: tr.name })} aria-haspopup="menu">▾</button>
+  </span>
 </article>
+
+<dialog bind:this={menu} class="menu" style:left="{menuAt.left}px" style:top="{menuAt.top}px" onclick={(e) => { if (e.target === menu) menu?.close(); }}>
+  <div role="menu" aria-label={tr.name}>
+    <button role="menuitem" onclick={() => pick('now')}><span aria-hidden="true">⚡</span><span>{t('menu.now')}<small>{t('menu.nowHelp')}</small></span></button>
+    <button role="menuitem" onclick={() => pick('done')}><span aria-hidden="true">🕘</span><span>{t('menu.earlier')}<small>{t('menu.earlierHelp')}</small></span></button>
+    <button role="menuitem" onclick={() => pick('plan')}><span aria-hidden="true">📅</span><span>{t('menu.plan')}<small>{t('menu.planHelp')}</small></span></button>
+  </div>
+</dialog>
 
 <style>
   .tracker {
     --tint: color-mix(in srgb, var(--c) 16%, var(--surface));
-    display: grid; grid-template-rows: 1fr auto; gap: 10px; padding: 14px; min-width: 0;
+    display: grid; grid-template-rows: 1fr; grid-auto-rows: auto; gap: 10px; padding: 14px; min-width: 0;
     border-radius: var(--radius); background: var(--tint);
     transition: transform 0.15s;
   }
@@ -127,6 +179,7 @@
   /* La place dans la grille (colonnes, lignes) est donnée par Dashboard. */
   .tracker.small { padding: 12px; gap: 8px; }
   .tracker.wide { grid-template-rows: none; grid-template-columns: 1fr auto; align-items: center; }
+  .wide .body { grid-column: 1; grid-row: 1; }
   .small .head { flex-direction: column; align-items: flex-start; gap: 4px; }
   .small .name { font-size: 0.9rem; max-width: 100%; }
   .small .log { min-height: 34px; min-width: 52px; padding: 0 12px; font-size: 0.9rem; }
@@ -156,6 +209,31 @@
   .small .next { padding: 2px 8px 2px 6px; gap: 4px; }
   .next .until { flex: none; font-weight: 700; }
   .next .when { min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+  .split { display: inline-flex; justify-self: start; align-self: end; }
+  .wide .split { grid-row: 1; grid-column: 2; align-self: center; }
+  .wide.has-todo .split { grid-row: 1 / span 2; }
+  .split .log:first-child { border-radius: 999px 0 0 999px; padding-right: 12px; }
+  .split .log.more { min-width: 0; padding: 0 12px 0 9px; border-radius: 0 999px 999px 0; border-left: 1px solid rgb(255 255 255 / 0.35); font-size: 0.85rem; }
+  .small .split .log.more { min-width: 0; padding: 0 9px 0 7px; }
+  .todo {
+    display: flex; align-items: center; gap: 6px; min-width: 0; justify-self: start; max-width: 100%; cursor: pointer; color: inherit; font: inherit;
+    padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 0.8rem; white-space: nowrap;
+    background: #fff4d6; border: 1px solid #f2c24b; color: #5c3d00;
+  }
+  .wide .todo { grid-column: 1; grid-row: 2; }
+  .todo .until { flex: none; font-weight: 700; }
+  .todo .when { min-width: 0; opacity: 0.8; overflow: hidden; text-overflow: ellipsis; }
+  .menu {
+    position: fixed; margin: 0; width: 240px; padding: 6px; border: 0; border-radius: 18px;
+    background: var(--surface); color: var(--text); box-shadow: 0 12px 40px rgb(20 10 60 / 0.25);
+  }
+  .menu::backdrop { background: rgb(20 10 60 / 0.25); }
+  .menu button {
+    display: flex; gap: 12px; align-items: center; width: 100%; padding: 11px 12px; border: 0; border-radius: 12px;
+    background: none; color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer;
+  }
+  .menu button:hover, .menu button:focus-visible { background: var(--surface-2); }
+  .menu small { display: block; font-weight: 400; color: var(--muted); font-size: 0.78rem; }
   .log {
     justify-self: start; border: 0; cursor: pointer; border-radius: 999px;
     min-height: 40px; min-width: 64px; padding: 0 16px;

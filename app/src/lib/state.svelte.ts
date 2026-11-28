@@ -4,6 +4,7 @@ import type { LifeEvent, Tracker, TrackerField } from './types';
 import { computeStats, goalStatus, type GoalStatus, type TrackerStats } from './domain/stats';
 import { achievements, type Achievement } from './domain/achievements';
 import { localOffset, type DeletedEvent } from './db/store';
+import { needsCompletion } from './domain/planned';
 
 export const app = $state({
   ready: false,
@@ -35,6 +36,8 @@ export interface TrackerView {
   events: LifeEvent[];
   /** Planned events, still in the future, soonest first. They join `events` once their time comes. */
   upcoming: LifeEvent[];
+  /** Past planned events still missing their measures, oldest first. */
+  todo: LifeEvent[];
   stats: TrackerStats;
   goal: GoalStatus | null;
   achievements: Achievement[];
@@ -50,10 +53,11 @@ export function viewOf(tracker: Tracker, now: number): TrackerView {
   }
   upcoming.sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
   const fields = app.fields.filter((f) => f.tracker_id === tracker.id);
+  const todo = events.filter((e) => needsCompletion(e, fields, now)).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
   const tz = localOffset();
   const stats = computeStats(tracker, events, now, tz);
   const goal = goalStatus(tracker, events, now, tz);
-  return { tracker, fields, events, upcoming, stats, goal, achievements: achievements(tracker, stats, goal) };
+  return { tracker, fields, events, upcoming, todo, stats, goal, achievements: achievements(tracker, stats, goal) };
 }
 
 // ---------- toasts ----------

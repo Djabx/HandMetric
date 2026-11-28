@@ -8,7 +8,11 @@
    */
   import { locale, t } from '../../lib/i18n/index.svelte';
 
-  let { value = $bindable(), label }: { value: number; label: string } = $props();
+  let {
+    value = $bindable(),
+    label,
+    future = false,
+  }: { value: number; label: string; /** Shortcuts towards the future (tonight, tomorrow, Saturday) instead of the past. */ future?: boolean } = $props();
 
   let open = $state(false);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -95,6 +99,16 @@
     shown = new Date(shown.getFullYear(), m, 1);
     view = 'days';
   }
+  /** Same time of day as the current value, `days` days from today (local time). */
+  function inDays(days: number, hour?: number): number {
+    const d = new Date();
+    const v = new Date(value);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days, hour ?? v.getHours(), hour === undefined ? v.getMinutes() : 0).getTime();
+  }
+  /** Days until next Saturday (a week later when today is Saturday). */
+  const toSaturday = $derived((6 - new Date(today).getDay() + 7) % 7 || 7);
+  const tonightAt = 20;
+  const tonightOpen = $derived(new Date().getHours() < tonightAt);
   function quick(ms: number) {
     value = ms;
     shown = new Date(new Date(ms).getFullYear(), new Date(ms).getMonth(), 1);
@@ -107,9 +121,15 @@
   </button>
 
   <div class="chips">
-    <button type="button" class="chip" onclick={() => quick(Date.now())}>{t('dt.now')}</button>
-    <button type="button" class="chip" onclick={() => quick(Date.now() - 3_600_000)}>{t('dt.hourAgo')}</button>
-    <button type="button" class="chip" onclick={() => quick(Date.now() - 86_400_000)}>{t('dt.yesterday')}</button>
+    {#if future}
+      {#if tonightOpen}<button type="button" class="chip" onclick={() => quick(inDays(0, tonightAt))}>{t('up.tonight')}</button>{/if}
+      <button type="button" class="chip" onclick={() => quick(inDays(1))}>{t('up.tomorrowChip')}</button>
+      {#if toSaturday > 1}<button type="button" class="chip" onclick={() => quick(inDays(toSaturday))}>{t('up.saturday')}</button>{/if}
+    {:else}
+      <button type="button" class="chip" onclick={() => quick(Date.now())}>{t('dt.now')}</button>
+      <button type="button" class="chip" onclick={() => quick(Date.now() - 3_600_000)}>{t('dt.hourAgo')}</button>
+      <button type="button" class="chip" onclick={() => quick(Date.now() - 86_400_000)}>{t('dt.yesterday')}</button>
+    {/if}
   </div>
 
   {#if open}

@@ -72,7 +72,12 @@
   }
   const cells = $derived(view ? heatmap(view.stats.perDay, clock.now, localOffset()) : []);
   const history = $derived(view ? [...view.events].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)) : []);
-  let shown = $state(30);
+  let shown = $state(10);
+  /** Journal first: what is coming and what just happened, then the statistics. */
+  let tab = $state<'journal' | 'stats' | 'achievements'>('journal');
+  /** The entry dialog opens on « planned » (the hero's Plan button). */
+  let planning = $state(false);
+  const todoIds = $derived(new Set(view?.todo.map((e) => e.id) ?? []));
   let allAch = $state(false);
   /** Succès obtenus + les 3 prochains de chaque famille. */
   const visibleAch = $derived.by(() => {
@@ -93,9 +98,15 @@
     return new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'numeric' }).format(new Date(key + 'T12:00:00Z'));
   }
 
+  function plan() {
+    planning = true;
+    editing = null;
+  }
+
   async function quickLog() {
     if (!tracker) return;
     if (view?.fields.length) {
+      planning = false;
       editing = null;
       return;
     }
@@ -136,8 +147,21 @@
         <div class="big">{t('dash.today', { n: view.stats.today })}</div>
         <div class="muted">{t('dash.week', { n: view.stats.thisWeek })}</div>
       {/if}
-      <button class="btn primary log" onclick={quickLog}>{t('dash.log')}</button>
+      <div class="hero-actions">
+        <button class="btn primary log" onclick={quickLog}>{t('dash.log')}</button>
+        <button class="btn plan" onclick={plan}>📅 {t('up.plan')}</button>
+      </div>
     </section>
+
+    <div class="segmented tabs">
+      <button aria-pressed={tab === 'journal'} onclick={() => (tab = 'journal')}>{t('tab.journal')}</button>
+      <button aria-pressed={tab === 'stats'} onclick={() => (tab = 'stats')}>{t('tab.stats')}</button>
+      {#if view.achievements.length}
+        <button aria-pressed={tab === 'achievements'} onclick={() => (tab = 'achievements')}>{t('tab.achievements')}</button>
+      {/if}
+    </div>
+
+    {#if tab === 'journal'}
 
     {#if view.upcoming.length}
     <section class="section">
@@ -146,7 +170,7 @@
         {#each view.upcoming as e (e.id)}
           <li>
             <button class="ev" onclick={() => (editing = e)}>
-              <span class="until">📅 {untilLabel(Date.parse(e.occurred_at), clock.now)}</span>
+              <span class="until">📅 {untilLabel(Date.parse(e.occurred_at), clock.now)} <span class="badge">{t('up.badge')}</span></span>
               <span class="small">{fmtDateTime(e.occurred_at)}</span>
               {#if measureText(e)}<span class="small">{measureText(e)}</span>{/if}
               {#if e.note}<span class="small muted">{e.note}</span>{/if}
@@ -156,6 +180,29 @@
       </ul>
     </section>
     {/if}
+
+    <section class="section">
+      <h2>{t('detail.recent')}</h2>
+      {#if history.length === 0}
+        <p class="muted">{t('detail.noEvents')}</p>
+      {:else}
+        <ul class="list card" style="padding:0 16px">
+          {#each history.slice(0, shown) as e (e.id)}
+            <li>
+              <button class="ev" onclick={() => (editing = e)}>
+                <span>{fmtDateTime(e.occurred_at)}{#if todoIds.has(e.id)} <span class="badge todo">✍️ {t('todo.badge')}</span>{/if}</span>
+                {#if measureText(e)}<span class="small">{measureText(e)}</span>{/if}
+                {#if e.note}<span class="small muted">{e.note}</span>{/if}
+              </button>
+            </li>
+          {/each}
+        </ul>
+        {#if history.length > shown}
+          <button class="btn" style="margin-top:8px" onclick={() => (shown += 50)}>{t('detail.more')}</button>
+        {/if}
+      {/if}
+    </section>
+    {:else if tab === 'stats'}
 
     <section class="section">
       <div class="stats-grid">
@@ -257,9 +304,8 @@
       <div class="card"><Heatmap {cells} {color} /></div>
     </section>
 
-    {#if view.achievements.length}
+    {:else}
     <section class="section">
-      <h2>{t('detail.achievements')}</h2>
       <Achievements list={allAch ? view.achievements : visibleAch} />
       {#if !allAch && visibleAch.length < view.achievements.length}
         <button class="btn small" style="margin-top:8px" onclick={() => (allAch = true)}>{t('detail.more')}</button>
@@ -267,32 +313,11 @@
     </section>
     {/if}
 
-    <section class="section">
-      <h2>{t('detail.history')}</h2>
-      {#if history.length === 0}
-        <p class="muted">{t('detail.noEvents')}</p>
-      {:else}
-        <ul class="list card" style="padding:0 16px">
-          {#each history.slice(0, shown) as e (e.id)}
-            <li>
-              <button class="ev" onclick={() => (editing = e)}>
-                <span>{fmtDateTime(e.occurred_at)}</span>
-                {#if measureText(e)}<span class="small">{measureText(e)}</span>{/if}
-                {#if e.note}<span class="small muted">{e.note}</span>{/if}
-              </button>
-            </li>
-          {/each}
-        </ul>
-        {#if history.length > shown}
-          <button class="btn" style="margin-top:8px" onclick={() => (shown += 50)}>{t('detail.more')}</button>
-        {/if}
-      {/if}
-    </section>
     <p class="small muted">{fmtDate(tracker.created_at)}</p>
   </div>
 
   {#if editing !== undefined}
-    <EventDialog {tracker} fields={view.fields} event={editing} onclose={() => (editing = undefined)} />
+    <EventDialog {tracker} fields={view.fields} event={editing} mode={planning ? 'plan' : 'done'} onclose={() => ((editing = undefined), (planning = false))} />
   {/if}
 {/if}
 
@@ -309,7 +334,12 @@
   .chart-nav .range { text-align: center; font-weight: 600; }
   .chart-nav .linkish { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline; }
   .chart-nav .icon-btn:disabled { opacity: 0.3; cursor: default; }
-  .log { justify-self: start; margin-top: 10px; min-width: 120px; font-family: var(--font-display); font-size: 1.15rem; background: var(--c); border-color: var(--c); color: #fff; color: lch(from var(--c) calc((68 - l) * 100) 0 0); }
+  .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .plan { background: var(--surface); }
+  .tabs { margin-top: 16px; }
+  .badge { font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
+  .badge.todo { background: #fff4d6; color: #5c3d00; }
+  .log { justify-self: start; min-width: 120px; font-family: var(--font-display); font-size: 1.15rem; background: var(--c); border-color: var(--c); color: #fff; color: lch(from var(--c) calc((68 - l) * 100) 0 0); }
   .upcoming { border: 1px dashed color-mix(in srgb, var(--c) 55%, transparent); }
   .upcoming .until { font-weight: 700; }
   .ev { display: grid; gap: 2px; width: 100%; text-align: left; padding: 10px 0; border: 0; background: none; cursor: pointer; }

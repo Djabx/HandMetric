@@ -14,6 +14,7 @@
   import { tileSize } from '../../lib/domain/tile';
   import { moveTo, slotAt, type Slot } from '../../lib/domain/reorder';
   import { haptic, prefersReducedMotion } from '../../lib/haptics';
+  import type { LifeEvent } from '../../lib/types';
 
   let lifted = $state<string | null>(null);
   let liveOrder = $state<string[]>([]);
@@ -24,7 +25,7 @@
   const views = $derived(
     lifted || settling ? liveOrder.map((id) => allViews.find((v) => v.tracker.id === id)).filter((v) => v !== undefined) : allViews,
   );
-  let logging = $state<TrackerView | null>(null);
+  let logging = $state<{ view: TrackerView; mode?: 'done' | 'plan'; event?: LifeEvent } | null>(null);
 
   // ---------- réorganisation ----------
   let reordering = $state(false);
@@ -284,7 +285,7 @@
           style:--c={v.tracker.color ?? 'var(--accent)'}
           animate:flip={{ duration: FLIP_MS, easing: cubicOut }}
         >
-          <TrackerCard view={v} now={clock.now} onlog={(x) => (logging = x)} />
+          <TrackerCard view={v} now={clock.now} onlog={(view, mode, event) => (logging = { view, mode, event })} />
         </div>
       {/each}
     </div>
@@ -310,7 +311,7 @@
 {/if}
 
 {#if logging}
-  <EventDialog tracker={logging.tracker} fields={logging.fields} onclose={() => (logging = null)} />
+  <EventDialog tracker={logging.view.tracker} fields={logging.view.fields} mode={logging.mode} event={logging.event ?? null} onclose={() => (logging = null)} />
 {/if}
 
 <style>
